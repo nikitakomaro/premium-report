@@ -319,6 +319,34 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None):
     return buf.getvalue()
 
 # ══════════════════════════════════════════════════════════════════════════════
+# PASSWORD PROTECTION
+# ══════════════════════════════════════════════════════════════════════════════
+def check_password():
+    correct = st.secrets.get("APP_PASSWORD", "surense2025")
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    if st.session_state.authenticated:
+        return True
+    st.markdown("""
+    <div style="max-width:360px;margin:80px auto;text-align:right;direction:rtl">
+        <div style="font-size:2rem;text-align:center;margin-bottom:8px">📊</div>
+        <h2 style="text-align:center;color:#1F4E79;margin-bottom:24px">מערכת דוחות פרמיה</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    col_l, col_m, col_r = st.columns([1,2,1])
+    with col_m:
+        pwd = st.text_input("🔒 סיסמה", type="password", placeholder="הכנס סיסמה...")
+        if st.button("כניסה", use_container_width=True):
+            if pwd == correct:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("סיסמה שגויה — נסה שוב")
+    st.stop()
+
+check_password()
+
+# ══════════════════════════════════════════════════════════════════════════════
 # UI
 # ══════════════════════════════════════════════════════════════════════════════
 st.title("📊 מערכת דוחות פרמיה")
