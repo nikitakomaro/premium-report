@@ -355,10 +355,26 @@ if f1 and f2:
     if len(result) > 0:
         st.markdown(f"""
         <br>
-        <div style="background:#fff3cd;border-radius:8px;padding:12px 16px;border-right:4px solid #FF9500;text-align:right">
-        ⚠️ <b>סך עלייה חודשית: ₪{result['עלייה ₪'].sum():,.0f}</b> &nbsp;|&nbsp;
-        ממוצע עלייה: {result['עלייה %'].mean():.1f}% &nbsp;|&nbsp;
-        מקסימום: {result['עלייה %'].max():.1f}%
+        <div style="background:#FFF3CD;border-radius:10px;padding:16px 20px;border:2px solid #FF9500;text-align:right;direction:rtl">
+            <div style="font-size:1.05rem;font-weight:bold;color:#7A4F00;margin-bottom:10px">⚠️ סיכום עליות פרמיה</div>
+            <div style="display:flex;justify-content:flex-end;gap:32px;flex-wrap:wrap">
+                <div style="text-align:center">
+                    <div style="font-size:1.4rem;font-weight:bold;color:#CC3300">₪{result['עלייה ₪'].sum():,.0f}</div>
+                    <div style="font-size:0.8rem;color:#7A4F00;margin-top:2px">סך עלייה חודשית</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.4rem;font-weight:bold;color:#CC3300">{result['עלייה %'].mean():.1f}%</div>
+                    <div style="font-size:0.8rem;color:#7A4F00;margin-top:2px">ממוצע עלייה</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.4rem;font-weight:bold;color:#CC3300">{result['עלייה %'].max():.1f}%</div>
+                    <div style="font-size:0.8rem;color:#7A4F00;margin-top:2px">עלייה מקסימלית</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.4rem;font-weight:bold;color:#1F4E79">{len(result)}</div>
+                    <div style="font-size:0.8rem;color:#7A4F00;margin-top:2px">פוליסות עם עלייה</div>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
