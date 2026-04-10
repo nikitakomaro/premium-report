@@ -476,18 +476,19 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
         story.append(Paragraph(rh('לא נמצאו פוליסות חדשות'), sub_s))
 
     # ══════════════════════════════════════════════
-    # עמוד 3 — חריגות דמי ניהול (רק בדוח כולל)
+    # עמוד 3 — חריגות דמי ניהול
     # ══════════════════════════════════════════════
-    if fee_exceptions is not None and len(fee_exceptions) > 0 and agent is None:
+    fe = fee_exceptions[fee_exceptions[COL_AGENT] == agent] if (fee_exceptions is not None and agent) else fee_exceptions
+    if fe is not None and len(fe) > 0:
         try:
             story.append(PageBreak())
             story += page_header('חריגות דמי ניהול — מוצרי חיסכון')
 
-            story.append(Paragraph(rh(f'מוצרים עם חריגה בדמי ניהול ({len(fee_exceptions)})'), sec_s))
+            story.append(Paragraph(rh(f'מוצרים עם חריגה בדמי ניהול ({len(fe)})'), sec_s))
             fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('צבירה כוללת'),
                   rh('דמי ניהול'), rh('סף מקסימלי'), rh('סיבת חריגה')]
             fd = [fh]
-            for _, row in fee_exceptions.iterrows():
+            for _, row in fe.iterrows():
                 raw_fee    = row.get('דמי ניהול מצבירה', 0)
                 raw_thresh = row.get('סף מקסימלי', 0)
                 fee    = float(raw_fee)    if pd.notna(raw_fee)    else 0.0
@@ -666,7 +667,7 @@ if f1 and f2:
     for agent in agents:
         with st.spinner(f"בונה דוח עבור {agent}..."):
             xl_a  = build_excel(merged, result, gone_df, new_df, agent=agent)
-            pdf_a = build_pdf(merged, result, gone_df, new_df, month_label, agent=agent)
+            pdf_a = build_pdf(merged, result, gone_df, new_df, month_label, agent=agent, fee_exceptions=fee_exceptions)
         safe = agent.replace(' ','_')
         st.markdown(f"**{agent}**")
         da, db = st.columns(2)
