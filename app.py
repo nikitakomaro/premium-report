@@ -97,7 +97,9 @@ CTR  = Alignment(horizontal='center', vertical='center')
 RGT  = Alignment(horizontal='right',  vertical='center')
 DFNT = Font(name='Arial', size=10)
 
-SAVINGS_TYPES = ['קרן השתלמות', 'קופת גמל לתגמולים ופיצויים', 'קופת גמל להשקעה']
+SAVINGS_TYPES  = ['קרן השתלמות', 'קופת גמל לתגמולים ופיצויים', 'קופת גמל להשקעה']
+PENSION_TYPES  = ['קרן פנסיה חדשה מקיפה', 'קרן פנסיה חדשה כללית', 'קרן פנסיה ותיקה']
+PENSION_DEPOSIT_THRESHOLD = 0.02   # 2% מהפקדה
 
 def get_fee_threshold(total_savings):
     if total_savings > 1_000_000:
@@ -150,6 +152,54 @@ def analyze_management_fees(file2_bytes):
     breakdown.columns = [COL_ID, 'סוג מוצר', 'צבירה']
 
     return exc, breakdown
+
+def analyze_pension_fees(file2_bytes):
+    """חריגות דמי ניהול בקרנות פנסיה — מהפקדה ומצבירה."""
+    df_raw = pd.read_excel(io.BytesIO(file2_bytes), sheet_name='מוצרי חיסכון')
+    df = df_raw[df_raw['סוג מוצר'].isin(PENSION_TYPES)].copy()
+    df = df[df['סטטוס מוצר'] == 'פעיל'].copy()
+    df['צבירה']                  = pd.to_numeric(df['צבירה'],                  errors='coerce').fillna(0)
+    df['דמי ניהול מהפקדה']      = pd.to_numeric(df['דמי ניהול מהפקדה'],      errors='coerce')
+    df['דמי ניהול מצבירה']      = pd.to_numeric(df['דמי ניהול מצבירה'],      errors='coerce')
+    df[COL_ID]                    = df[COL_ID].astype(str).str.strip()
+    df['שם לקוח']                = df['שם פרטי לקוח'].fillna('') + ' ' + df['שם משפחה לקוח'].fillna('')
+
+    # ── טבלה 1: חריגות דמי ניהול מהפקדה (>2%) ──
+    exc1 = df[
+        df['דמי ניהול מהפקדה'].notna() &
+        (df['דמי ניהול מהפקדה'] > PENSION_DEPOSIT_THRESHOLD)
+    ].copy()
+    exc1 = exc1.sort_values('דמי ניהול מהפקדה', ascending=False).reset_index(drop=True)
+
+    # ── טבלה 2: חריגות דמי ניהול מצבירה (לפי מדרגות) ──
+    def pension_acc_threshold(s):
+        if s > 1_000_000: return 0.0005
+        if s > 500_000:   return 0.0008
+        if s > 200_000:   return 0.001
+        return None  # מתחת 200K — לא נבדק
+
+    def pension_acc_reason(s):
+        if s > 1_000_000: return 'מעל ₪1M — מקס׳ 0.05%'
+        if s > 500_000:   return 'מעל ₪500K — מקס׳ 0.08%'
+        if s > 200_000:   return 'מעל ₪200K — מקס׳ 0.10%'
+        return None
+
+    # צבירה כוללת לפי לקוח (בתוך קרנות פנסיה בלבד)
+    totals = df.groupby(COL_ID)['צבירה'].sum().reset_index()
+    totals.columns = [COL_ID, 'צבירה כוללת']
+    df2 = df.merge(totals, on=COL_ID)
+    df2['סף מצבירה']   = df2['צבירה כוללת'].apply(pension_acc_threshold)
+    df2['סיבת חריגה']  = df2['צבירה כוללת'].apply(pension_acc_reason)
+
+    exc2 = df2[
+        df2['דמי ניהול מצבירה'].notna() &
+        df2['סף מצבירה'].notna() &
+        (df2['דמי ניהול מצבירה'] > df2['סף מצבירה'])
+    ].copy()
+    exc2.rename(columns={'סף מצבירה': 'סף מקסימלי'}, inplace=True)
+    exc2 = exc2.sort_values(['צבירה כוללת', 'דמי ניהול מצבירה'], ascending=[False, False]).reset_index(drop=True)
+
+    return exc1, exc2
 
 def analyze_gold_customers(file2_bytes):
     """לקוחות עם צבירה כוללת מעל מיליון ש״ח במוצרי חיסכון."""
@@ -230,7 +280,7 @@ def analyze(file1_bytes, file2_bytes):
     return merged, result, gone_df, new_df, df1d, df2d
 
 # ── Excel builder ─────────────────────────────────────────────────────────────
-def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None, gold_customers=None):
+def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None, gold_customers=None, pension_deposit_exc=None, pension_acc_exc=None):
     wb = Workbook()
     HDR = PatternFill('solid', start_color='1F4E79')
     HF  = Font(name='Arial', bold=True, color='FFFFFF', size=11)
@@ -406,12 +456,53 @@ def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None
                 if fill: c.fill = fill
                 if fmt:  c.number_format = fmt
 
+    # Sheet 7 — חריגות פנסיה מהפקדה
+    def pension_sheet(ws, title, df_p, hdr_color, cols, col_fmts):
+        ws.sheet_view.rightToLeft = True
+        PHDR = PatternFill('solid', start_color=hdr_color)
+        PALE = PatternFill('solid', start_color='F0E6FF')
+        wids = [14,22,18,22,14,14,14,14,28]
+        for ci, (h, w) in enumerate(zip(cols, wids[:len(cols)]), 1):
+            c = ws.cell(row=1, column=ci, value=h)
+            c.font = Font(name='Arial', bold=True, color='FFFFFF', size=10)
+            c.fill = PHDR; c.alignment = CTR; c.border = BORD
+            ws.column_dimensions[get_column_letter(ci)].width = w
+        ws.row_dimensions[1].height = 22
+        ws.freeze_panes = 'A2'
+        ws.auto_filter.ref = f'A1:{get_column_letter(len(cols))}1'
+        for ri, (_, row) in enumerate(df_p.iterrows()):
+            fill = PALE if ri % 2 == 0 else None
+            vals = [row.get(c, '') for c in col_fmts.keys()]
+            fmts = list(col_fmts.values())
+            for ci, (val, fmt) in enumerate(zip(vals, fmts), 1):
+                c = ws.cell(row=ri+2, column=ci, value=val)
+                c.font = DFNT; c.border = BORD; c.alignment = RGT
+                if fill: c.fill = fill
+                if fmt:  c.number_format = fmt
+
+    if pension_deposit_exc is not None and len(pension_deposit_exc) > 0 and agent is None:
+        ws7 = wb.create_sheet('פנסיה — חריגות הפקדה')
+        p1_col_fmts = {COL_ID: None, 'שם לקוח': None, COL_AGENT: None,
+                       'סוג מוצר': None, 'מוצר': None, 'צבירה': '#,##0',
+                       'דמי ניהול מהפקדה': '0.000%'}
+        pension_sheet(ws7, 'חריגות דמי ניהול מהפקדה — קרן פנסיה',
+                      pension_deposit_exc, '6A0DAD', list(p1_col_fmts.keys()), p1_col_fmts)
+
+    if pension_acc_exc is not None and len(pension_acc_exc) > 0 and agent is None:
+        ws8 = wb.create_sheet('פנסיה — חריגות צבירה')
+        p2_col_fmts = {COL_ID: None, 'שם לקוח': None, COL_AGENT: None,
+                       'סוג מוצר': None, 'מוצר': None, 'צבירה': '#,##0',
+                       'צבירה כוללת': '#,##0', 'דמי ניהול מצבירה': '0.000%',
+                       'סף מקסימלי': '0.000%', 'סיבת חריגה': None}
+        pension_sheet(ws8, 'חריגות דמי ניהול מצבירה — קרן פנסיה',
+                      pension_acc_exc, '154360', list(p2_col_fmts.keys()), p2_col_fmts)
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 # ── PDF builder ───────────────────────────────────────────────────────────────
-def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exceptions=None, gold_customers=None):
+def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exceptions=None, gold_customers=None, pension_deposit_exc=None, pension_acc_exc=None):
     _register_font()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -667,6 +758,69 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
         except Exception as e:
             story.append(Paragraph(rh(f'שגיאה בטעינת טבלת לקוחות זהב: {e}'), sub_s))
 
+    # ══════════════════════════════════════════════
+    # עמוד 5 — חריגות פנסיה
+    # ══════════════════════════════════════════════
+    pd1 = pension_deposit_exc[pension_deposit_exc[COL_AGENT]==agent] if (pension_deposit_exc is not None and agent) else pension_deposit_exc
+    pa1 = pension_acc_exc[pension_acc_exc[COL_AGENT]==agent]         if (pension_acc_exc     is not None and agent) else pension_acc_exc
+    has_p1 = pd1 is not None and len(pd1) > 0
+    has_p2 = pa1 is not None and len(pa1) > 0
+
+    if has_p1 or has_p2:
+        try:
+            story.append(PageBreak())
+            story += page_header('חריגות דמי ניהול — קרן פנסיה')
+
+            def pension_table(df_p, title, hdr_color, cols_def):
+                """cols_def = [(header, col_key, fmt_fn)]"""
+                story.append(Paragraph(rh(title), sec_s))
+                th = [rh(h) for h,_,_ in cols_def]
+                td = [th]
+                for _, row in df_p.iterrows():
+                    td.append([fmt(row.get(k,'')) for _,k,fmt in cols_def])
+                col_ws = [2.0*cm, 3.0*cm, 2.0*cm, 2.5*cm, 2.5*cm, 2.0*cm, 2.0*cm, 3.5*cm]
+                t = Table(td, colWidths=col_ws[:len(cols_def)], repeatRows=1)
+                ts = [
+                    ('BACKGROUND',(0,0),(-1,0),colors.HexColor(hdr_color)),
+                    ('TEXTCOLOR', (0,0),(-1,0),colors.white),
+                    ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
+                    ('FONTSIZE',  (0,0),(-1,0),8),('FONTSIZE',(0,1),(-1,-1),7),
+                    ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
+                    ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
+                    ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+                ]
+                for i in range(1, len(td)):
+                    bg = colors.HexColor('#F4ECF7') if i%2==1 else colors.HexColor('#EAF2FF')
+                    ts.append(('BACKGROUND',(0,i),(-1,i),bg))
+                t.setStyle(TableStyle(ts))
+                story.append(t)
+                story.append(Spacer(1, 0.5*cm))
+
+            if has_p1:
+                pension_table(pd1, f'טבלה 1 — חריגות דמי ניהול מהפקדה >2% ({len(pd1)})', '#6A0DAD', [
+                    ('ת.ז',        COL_ID,                  lambda v: rh(str(v))),
+                    ('שם לקוח',    'שם לקוח',               lambda v: rh(str(v))),
+                    ('מת"ל',       COL_AGENT,                lambda v: rh(str(v))),
+                    ('סוג מוצר',   'סוג מוצר',              lambda v: rh(str(v))),
+                    ('מוצר',       'מוצר',                   lambda v: rh(str(v))),
+                    ('צבירה',      'צבירה',                  lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
+                    ('דמי הפקדה',  'דמי ניהול מהפקדה',      lambda v: f"{float(v)*100:.3f}%" if pd.notna(v) and v!='' else '—'),
+                ])
+
+            if has_p2:
+                pension_table(pa1, f'טבלה 2 — חריגות דמי ניהול מצבירה ({len(pa1)})', '#154360', [
+                    ('ת.ז',        COL_ID,                  lambda v: rh(str(v))),
+                    ('שם לקוח',    'שם לקוח',               lambda v: rh(str(v))),
+                    ('מת"ל',       COL_AGENT,                lambda v: rh(str(v))),
+                    ('סוג מוצר',   'סוג מוצר',              lambda v: rh(str(v))),
+                    ('צבירה',      'צבירה',                  lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
+                    ('צבירה כוללת','צבירה כוללת',            lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
+                    ('דמי צבירה',  'דמי ניהול מצבירה',      lambda v: f"{float(v)*100:.3f}%" if pd.notna(v) and v!='' else '—'),
+                    ('סיבת חריגה', 'סיבת חריגה',            lambda v: rh(str(v))),
+                ])
+        except Exception as e:
+            story.append(Paragraph(rh(f'שגיאה בטעינת טבלת פנסיה: {e}'), sub_s))
+
     doc.build(story)
     return buf.getvalue()
 
@@ -721,6 +875,7 @@ if f1 and f2:
             f2_bytes = f2.read()
             merged, result, gone_df, new_df, df1d, df2d = analyze(f1_bytes, f2_bytes)
             fee_exceptions, fee_breakdown = analyze_management_fees(f2_bytes)
+            pension_deposit_exc, pension_acc_exc = analyze_pension_fees(f2_bytes)
             gold_customers = analyze_gold_customers(f2_bytes)
             agents = sorted(merged['מת"ל'].dropna().unique().tolist())
             month_label = f'{f1.name[:10]} ← {f2.name[:10]}'
@@ -798,6 +953,31 @@ if f1 and f2:
         st.dataframe(fee_preview, use_container_width=True, hide_index=True)
 
     # ── Gold customers ──
+    # ── Pension fee exceptions ──
+    if len(pension_deposit_exc) > 0 or len(pension_acc_exc) > 0:
+        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+        st.subheader("🏦 חריגות דמי ניהול — קרן פנסיה")
+
+        if len(pension_deposit_exc) > 0:
+            st.markdown(f"**טבלה 1 — חריגות דמי ניהול מהפקדה ({len(pension_deposit_exc)} מוצרים)**")
+            st.markdown("""<div style="background:#4A1A6B;border-radius:8px;padding:10px 14px;border:2px solid #9B59B6;text-align:right;direction:rtl;margin-bottom:10px;color:#E8DAEF;">
+            🔵 לקוחות שמשלמים יותר מ-2% דמי ניהול מהפקדה</div>""", unsafe_allow_html=True)
+            p1 = pension_deposit_exc[[c for c in ['שם לקוח', COL_AGENT, 'סוג מוצר', 'מוצר', 'צבירה', 'דמי ניהול מהפקדה'] if c in pension_deposit_exc.columns]].copy()
+            if 'צבירה' in p1.columns: p1['צבירה'] = p1['צבירה'].map(lambda x: f"₪{x:,.0f}")
+            if 'דמי ניהול מהפקדה' in p1.columns: p1['דמי ניהול מהפקדה'] = p1['דמי ניהול מהפקדה'].map(lambda x: f"{x*100:.3f}%")
+            st.dataframe(p1, use_container_width=True, hide_index=True)
+
+        if len(pension_acc_exc) > 0:
+            st.markdown(f"**טבלה 2 — חריגות דמי ניהול מצבירה ({len(pension_acc_exc)} מוצרים)**")
+            st.markdown("""<div style="background:#154360;border-radius:8px;padding:10px 14px;border:2px solid #2E86C1;text-align:right;direction:rtl;margin-bottom:10px;color:#D6EAF8;">
+            🔷 לקוחות שמשלמים דמי ניהול מצבירה מעל הסף לפי גובה הצבירה</div>""", unsafe_allow_html=True)
+            p2 = pension_acc_exc[[c for c in ['שם לקוח', COL_AGENT, 'סוג מוצר', 'מוצר', 'צבירה', 'צבירה כוללת', 'דמי ניהול מצבירה', 'סף מקסימלי', 'סיבת חריגה'] if c in pension_acc_exc.columns]].copy()
+            if 'צבירה' in p2.columns: p2['צבירה'] = p2['צבירה'].map(lambda x: f"₪{x:,.0f}")
+            if 'צבירה כוללת' in p2.columns: p2['צבירה כוללת'] = p2['צבירה כוללת'].map(lambda x: f"₪{x:,.0f}")
+            if 'דמי ניהול מצבירה' in p2.columns: p2['דמי ניהול מצבירה'] = p2['דמי ניהול מצבירה'].map(lambda x: f"{x*100:.3f}%")
+            if 'סף מקסימלי' in p2.columns: p2['סף מקסימלי'] = p2['סף מקסימלי'].map(lambda x: f"{x*100:.3f}%")
+            st.dataframe(p2, use_container_width=True, hide_index=True)
+
     if len(gold_customers) > 0:
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.subheader(f"🏆 לקוחות זהב — {len(gold_customers)} לקוחות עם צבירה מעל ₪1M")
@@ -826,8 +1006,8 @@ if f1 and f2:
 
     # Combined
     with st.spinner("בונה דוח כולל..."):
-        xl_all  = build_excel(merged, result, gone_df, new_df, fee_exceptions=fee_exceptions, gold_customers=gold_customers)
-        pdf_all = build_pdf(merged, result, gone_df, new_df, month_label, fee_exceptions=fee_exceptions, gold_customers=gold_customers)
+        xl_all  = build_excel(merged, result, gone_df, new_df, fee_exceptions=fee_exceptions, gold_customers=gold_customers, pension_deposit_exc=pension_deposit_exc, pension_acc_exc=pension_acc_exc)
+        pdf_all = build_pdf(merged, result, gone_df, new_df, month_label, fee_exceptions=fee_exceptions, gold_customers=gold_customers, pension_deposit_exc=pension_deposit_exc, pension_acc_exc=pension_acc_exc)
 
     st.markdown("**דוח כולל — כל הסוכנים**")
     ca, cb = st.columns(2)
@@ -845,7 +1025,7 @@ if f1 and f2:
     for agent in agents:
         with st.spinner(f"בונה דוח עבור {agent}..."):
             xl_a  = build_excel(merged, result, gone_df, new_df, agent=agent)
-            pdf_a = build_pdf(merged, result, gone_df, new_df, month_label, agent=agent, fee_exceptions=fee_exceptions, gold_customers=gold_customers)
+            pdf_a = build_pdf(merged, result, gone_df, new_df, month_label, agent=agent, fee_exceptions=fee_exceptions, gold_customers=gold_customers, pension_deposit_exc=pension_deposit_exc, pension_acc_exc=pension_acc_exc)
         safe = agent.replace(' ','_')
         st.markdown(f"**{agent}**")
         da, db = st.columns(2)
