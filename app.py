@@ -807,19 +807,11 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
             def pension_table(df_p, title, hdr_color, cols_def, color_by_savings=False):
                 """cols_def = [(header, col_key, fmt_fn)]"""
                 story.append(Paragraph(rh(title), sec_s))
-                # סגנונות לכותרות ולתאי גוף (עם גלישת טקסט — ללא RTL כפול)
-                hdr_cell_s = ParagraphStyle('phdr', fontName=BASE_FONT, fontSize=8,
-                                            textColor=colors.white, alignment=2, leading=10)
-                body_cell_s = ParagraphStyle('pbody', fontName=BASE_FONT, fontSize=7,
-                                             textColor=colors.black, alignment=2, leading=9)
-                def _ph(txt): return Paragraph(rh(str(txt)), hdr_cell_s)
-                def _pb(txt): return Paragraph(rh(str(txt)), body_cell_s)
-
-                th = [_ph(h) for h,_,_ in cols_def]
+                th = [rh(h) for h,_,_ in cols_def]
                 td = [th]
                 rows_list = list(df_p.iterrows())
                 for _, row in rows_list:
-                    td.append([_pb(fmt(row.get(k,''))) for _,k,fmt in cols_def])
+                    td.append([fmt(row.get(k,'')) for _,k,fmt in cols_def])
                 # רוחבי עמודות: ת.ז | שם לקוח | מת"ל | סוג מוצר | חברה | צבירה | צבירה כוללת | דמי צבירה | סיבת חריגה
                 col_ws = [1.8*cm, 2.8*cm, 3.2*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.5*cm, 1.5*cm]
                 t = Table(td, colWidths=col_ws[:len(cols_def)], repeatRows=1)
@@ -841,11 +833,15 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 story.append(t)
                 story.append(Spacer(1, 0.5*cm))
 
+            def _agent(v):
+                s = str(v)
+                return rh(s[:22] + '…' if len(s) > 22 else s)
+
             if has_p1:
                 pension_table(pd1, f'טבלה 1 — חריגות דמי ניהול מהפקדה >2% ({len(pd1)})', '#6A0DAD', [
                     ('ת.ז',        COL_ID,                  lambda v: rh(str(v))),
                     ('שם לקוח',    'שם לקוח',               lambda v: rh(str(v))),
-                    ('מת"ל',       COL_AGENT,                lambda v: rh(str(v))),
+                    ('מת"ל',       COL_AGENT,                _agent),
                     ('סוג מוצר',   'סוג מוצר',              lambda v: rh(str(v))),
                     ('חברה',       'יצרן',                   lambda v: rh(str(v))),
                     ('צבירה',      'צבירה',                  lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
@@ -856,7 +852,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 pension_table(pa1, f'טבלה 2 — חריגות דמי ניהול מצבירה ({len(pa1)})', '#154360', [
                     ('ת.ז',        COL_ID,                  lambda v: rh(str(v))),
                     ('שם לקוח',    'שם לקוח',               lambda v: rh(str(v))),
-                    ('מת"ל',       COL_AGENT,                lambda v: rh(str(v))),
+                    ('מת"ל',       COL_AGENT,                _agent),
                     ('סוג מוצר',   'סוג מוצר',              lambda v: rh(str(v))),
                     ('חברה',       'יצרן',                   lambda v: rh(str(v))),
                     ('צבירה',      'צבירה',                  lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
