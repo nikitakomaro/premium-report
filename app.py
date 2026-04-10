@@ -715,7 +715,9 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 s = str(name).strip()
                 s = re.sub(r'(?i)אינטרגמל', 'מור', s)
                 # הסר סיומות כמו "השתלמות", "קופות גמל", "להשקעה" וכו'
-                s = re.sub(r'\s+(השתלמות|קופות?\s+גמל|להשקעה|גמל|לתגמולים.*|ופיצויים.*)$', '', s).strip()
+                s = re.sub(r'\s+(השתלמות|קופות?\s+גמל|קופת\s+גמל|להשקעה|גמל|לתגמולים.*|ופיצויים.*)$', '', s).strip()
+                # אם נשאר "מור קופת" / "מור קופת גמל" — הפוך ל"מור"
+                s = re.sub(r'^מור\b.*', 'מור', s)
                 return s
 
             fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('חברה'),
@@ -737,7 +739,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                     f"{thresh*100:.2f}%",
                     rh(str(row.get('סיבת חריגה','')))
                 ])
-            ft = Table(fd, colWidths=[1.8*cm,2.8*cm,2.4*cm,2.8*cm,1.8*cm,1.9*cm,1.7*cm,1.7*cm,3.6*cm], repeatRows=1)
+            ft = Table(fd, colWidths=[1.8*cm,2.8*cm,2.4*cm,2.0*cm,1.8*cm,1.9*cm,1.7*cm,1.7*cm,3.6*cm], repeatRows=1)
             fts = [
                 ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FF6600')),
                 ('TEXTCOLOR', (0,0),(-1,0),colors.white),
