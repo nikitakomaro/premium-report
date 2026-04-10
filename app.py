@@ -479,38 +479,45 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
     # עמוד 3 — חריגות דמי ניהול (רק בדוח כולל)
     # ══════════════════════════════════════════════
     if fee_exceptions is not None and len(fee_exceptions) > 0 and agent is None:
-        story.append(PageBreak())
-        story += page_header('חריגות דמי ניהול — מוצרי חיסכון')
+        try:
+            story.append(PageBreak())
+            story += page_header('חריגות דמי ניהול — מוצרי חיסכון')
 
-        story.append(Paragraph(rh(f'מוצרים עם חריגה בדמי ניהול ({len(fee_exceptions)})'), sec_s))
-        fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('צבירה כוללת'),
-              rh('דמי ניהול'), rh('סף מקסימלי'), rh('סיבת חריגה')]
-        fd = [fh]
-        for _, row in fee_exceptions.iterrows():
-            fee    = row.get('דמי ניהול מצבירה', 0) or 0
-            thresh = row.get('סף מקסימלי', 0) or 0
-            fd.append([
-                rh(str(row.get(COL_ID,''))),
-                rh(str(row.get('שם לקוח',''))),
-                rh(str(row.get('סוג מוצר',''))),
-                f"₪{row.get('צבירה כוללת',0):,.0f}",
-                f"{fee*100:.3f}%",
-                f"{thresh*100:.2f}%",
-                rh(str(row.get('סיבת חריגה','')))
-            ])
-        ft = Table(fd, colWidths=[2.0*cm,3.2*cm,2.8*cm,2.5*cm,2.0*cm,2.0*cm,4.0*cm], repeatRows=1)
-        fts = [
-            ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FF6600')),
-            ('TEXTCOLOR', (0,0),(-1,0),colors.white),
-            ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
-            ('FONTSIZE',  (0,0),(-1,0),8),('FONTSIZE',(0,1),(-1,-1),7),
-            ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
-            ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
-            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-            ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#FFF0E0')]),
-        ]
-        ft.setStyle(TableStyle(fts))
-        story.append(ft)
+            story.append(Paragraph(rh(f'מוצרים עם חריגה בדמי ניהול ({len(fee_exceptions)})'), sec_s))
+            fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('צבירה כוללת'),
+                  rh('דמי ניהול'), rh('סף מקסימלי'), rh('סיבת חריגה')]
+            fd = [fh]
+            for _, row in fee_exceptions.iterrows():
+                raw_fee    = row.get('דמי ניהול מצבירה', 0)
+                raw_thresh = row.get('סף מקסימלי', 0)
+                fee    = float(raw_fee)    if pd.notna(raw_fee)    else 0.0
+                thresh = float(raw_thresh) if pd.notna(raw_thresh) else 0.0
+                fd.append([
+                    rh(str(row.get(COL_ID,''))),
+                    rh(str(row.get('שם לקוח',''))),
+                    rh(str(row.get('סוג מוצר',''))),
+                    f"₪{row.get('צבירה כוללת',0):,.0f}",
+                    f"{fee*100:.3f}%",
+                    f"{thresh*100:.2f}%",
+                    rh(str(row.get('סיבת חריגה','')))
+                ])
+            ft = Table(fd, colWidths=[2.0*cm,3.2*cm,2.8*cm,2.5*cm,2.0*cm,2.0*cm,4.0*cm], repeatRows=1)
+            fts = [
+                ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FF6600')),
+                ('TEXTCOLOR', (0,0),(-1,0),colors.white),
+                ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
+                ('FONTSIZE',  (0,0),(-1,0),8),('FONTSIZE',(0,1),(-1,-1),7),
+                ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
+                ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
+                ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+            ]
+            for i in range(1, len(fd)):
+                bg = colors.HexColor('#FFF0E0') if i % 2 == 0 else colors.white
+                fts.append(('BACKGROUND',(0,i),(-1,i),bg))
+            ft.setStyle(TableStyle(fts))
+            story.append(ft)
+        except Exception as e:
+            story.append(Paragraph(rh(f'שגיאה בטעינת טבלת חריגות: {e}'), sub_s))
 
     doc.build(story)
     return buf.getvalue()
