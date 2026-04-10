@@ -807,19 +807,28 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
             def pension_table(df_p, title, hdr_color, cols_def, color_by_savings=False):
                 """cols_def = [(header, col_key, fmt_fn)]"""
                 story.append(Paragraph(rh(title), sec_s))
-                th = [rh(h) for h,_,_ in cols_def]
+                # סגנונות לכותרות ולתאי גוף (עם גלישת טקסט)
+                hdr_cell_s = ParagraphStyle('phdr', fontName=BASE_FONT, fontSize=8,
+                                            textColor=colors.white, alignment=2)
+                body_cell_s = ParagraphStyle('pbody', fontName=BASE_FONT, fontSize=7,
+                                             textColor=colors.black, alignment=2,
+                                             leading=9, wordWrap='RTL')
+                def _ph(txt): return Paragraph(rh(str(txt)), hdr_cell_s)
+                def _pb(txt): return Paragraph(rh(str(txt)), body_cell_s)
+
+                th = [_ph(h) for h,_,_ in cols_def]
                 td = [th]
                 rows_list = list(df_p.iterrows())
                 for _, row in rows_list:
-                    td.append([fmt(row.get(k,'')) for _,k,fmt in cols_def])
-                col_ws = [2.0*cm, 3.0*cm, 2.0*cm, 2.0*cm, 2.5*cm, 2.0*cm, 2.0*cm, 1.8*cm, 3.0*cm]
+                    td.append([_pb(fmt(row.get(k,''))) for _,k,fmt in cols_def])
+                # רוחבי עמודות: ת.ז | שם לקוח | מת"ל | סוג מוצר | חברה | צבירה | צבירה כוללת | דמי צבירה | סיבת חריגה
+                col_ws = [1.8*cm, 2.8*cm, 3.2*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.5*cm, 1.5*cm]
                 t = Table(td, colWidths=col_ws[:len(cols_def)], repeatRows=1)
                 ts = [
                     ('BACKGROUND',(0,0),(-1,0),colors.HexColor(hdr_color)),
-                    ('TEXTCOLOR', (0,0),(-1,0),colors.white),
                     ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
-                    ('FONTSIZE',  (0,0),(-1,0),8),('FONTSIZE',(0,1),(-1,-1),7),
                     ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
+                    ('VALIGN',    (0,0),(-1,-1),'TOP'),
                     ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
                     ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
                 ]
