@@ -141,17 +141,19 @@ def analyze_management_fees(file2_bytes):
     exc['שם לקוח'] = exc['שם פרטי לקוח'].fillna('') + ' ' + exc['שם משפחה לקוח'].fillna('')
 
     # קיבוץ לפי לקוח — שורה אחת לכל לקוח עם דמי הניהול הגבוהים ביותר
+    prod_col = 'מוצר' if 'מוצר' in exc.columns else None
     agg = exc.sort_values('דמי ניהול מצבירה', ascending=False).groupby(COL_ID, sort=False).agg(
         שם_לקוח    = ('שם לקוח',           'first'),
         agent       = (COL_AGENT,            'first'),
         סוג_מוצר   = ('סוג מוצר',           lambda x: ' / '.join(x.unique())),
+        שם_מוצר    = (prod_col or 'סוג מוצר', lambda x: ' / '.join(x.dropna().unique())),
         צבירה_כוללת= ('צבירה כוללת',        'first'),
         דמי_ניהול  = ('דמי ניהול מצבירה',   'max'),
         סף_מקסימלי = ('סף מקסימלי',         'first'),
         סיבת_חריגה = ('סיבת חריגה',         'first'),
     ).reset_index()
 
-    agg.columns = [COL_ID, 'שם לקוח', COL_AGENT, 'סוג מוצר', 'צבירה כוללת',
+    agg.columns = [COL_ID, 'שם לקוח', COL_AGENT, 'סוג מוצר', 'שם מוצר', 'צבירה כוללת',
                    'דמי ניהול מצבירה', 'סף מקסימלי', 'סיבת חריגה']
     agg = agg.sort_values('צבירה כוללת', ascending=False).reset_index(drop=True)
     return agg
@@ -657,7 +659,7 @@ if f1 and f2:
         🔶 נמצאו לקוחות שמשלמים דמי ניהול מצבירה מעל הסף המותר לפי גובה הצבירה שלהם
         </div>
         """, unsafe_allow_html=True)
-        fee_preview = fee_exceptions[['שם לקוח','מת"ל','סוג מוצר','צבירה כוללת','דמי ניהול מצבירה','סף מקסימלי','סיבת חריגה']].copy()
+        fee_preview = fee_exceptions[['שם לקוח','מת"ל','סוג מוצר','שם מוצר','צבירה כוללת','דמי ניהול מצבירה','סף מקסימלי','סיבת חריגה']].copy()
         fee_preview['צבירה כוללת']        = fee_preview['צבירה כוללת'].map(lambda x: f"₪{x:,.0f}")
         fee_preview['דמי ניהול מצבירה']   = fee_preview['דמי ניהול מצבירה'].map(lambda x: f"{x*100:.3f}%")
         fee_preview['סף מקסימלי']          = fee_preview['סף מקסימלי'].map(lambda x: f"{x*100:.2f}%")
