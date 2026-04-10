@@ -536,8 +536,9 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             rightMargin=1.0*cm, leftMargin=1.0*cm,
                             topMargin=2*cm, bottomMargin=2*cm)
-    title_s = ParagraphStyle('t', fontName=BASE_FONT, fontSize=16,
-                              textColor=colors.HexColor('#1F4E79'), spaceAfter=4, alignment=2)
+    title_s = ParagraphStyle('t', fontName=BASE_FONT, fontSize=18,
+                              textColor=colors.HexColor('#1F4E79'), spaceAfter=3,
+                              alignment=2, leading=22)
     sub_s   = ParagraphStyle('s', fontName=BASE_FONT, fontSize=10,
                               textColor=colors.grey, spaceAfter=8, alignment=2)
     sec_s   = ParagraphStyle('h', fontName=BASE_FONT, fontSize=12,
@@ -551,10 +552,15 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
     def page_header(ttl):
         """Returns title + subtitle paragraphs for the top of each page."""
         items = [Paragraph(rh(ttl), title_s)]
+        # קו הפרדה מתחת לכותרת
+        items.append(Table([['']], colWidths=[19*cm],
+                           style=TableStyle([
+                               ('LINEBELOW', (0,0), (-1,0), 1.5, colors.HexColor('#2E86C1')),
+                               ('TOPPADDING', (0,0), (-1,-1), 0),
+                               ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+                           ])))
         if agent:
             items.append(Paragraph(rh(f'סוכן: {agent}'), sub_s))
-        items.append(Paragraph(rh(month_label), sub_s))
-        items.append(Paragraph(rh(f'הופק: {datetime.now().strftime("%d/%m/%Y")}'), sub_s))
         items.append(Spacer(1, 0.3*cm))
         return items
 
