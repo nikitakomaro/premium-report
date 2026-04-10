@@ -141,6 +141,7 @@ def analyze_management_fees(file2_bytes):
         (df['דמי ניהול מצבירה'] > df['סף מקסימלי'])
     ].copy()
     exc['שם לקוח'] = exc['שם פרטי לקוח'].fillna('') + ' ' + exc['שם משפחה לקוח'].fillna('')
+    exc['סוג מוצר'] = exc['סוג מוצר'].replace('קופת גמל לתגמולים ופיצויים', 'קופת גמל')
     exc = exc.sort_values(['צבירה כוללת', 'דמי ניהול מצבירה'], ascending=[False, False]).reset_index(drop=True)
 
     # פירוט צבירה לפי סוג מוצר לכל לקוח חריג (לdebug)
