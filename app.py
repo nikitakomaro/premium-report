@@ -120,8 +120,8 @@ def get_fee_reason(total_savings):
         return 'דמי ניהול מעל 0.80%'
 
 def analyze_management_fees(file2_bytes):
-    df = pd.read_excel(io.BytesIO(file2_bytes), sheet_name='מוצרי חיסכון')
-    df = df[df['סוג מוצר'].isin(SAVINGS_TYPES)].copy()
+    df_raw = pd.read_excel(io.BytesIO(file2_bytes), sheet_name='מוצרי חיסכון')
+    df = df_raw[df_raw['סוג מוצר'].isin(SAVINGS_TYPES)].copy()
     df = df[df['סטטוס מוצר'] == 'פעיל'].copy()
     df['צבירה']               = pd.to_numeric(df['צבירה'], errors='coerce').fillna(0)
     df['דמי ניהול מצבירה']   = pd.to_numeric(df['דמי ניהול מצבירה'], errors='coerce')
@@ -587,11 +587,20 @@ if f1 and f2:
             f2_bytes = f2.read()
             merged, result, gone_df, new_df, df1d, df2d = analyze(f1_bytes, f2_bytes)
             fee_exceptions = analyze_management_fees(f2_bytes)
+            # DEBUG — show savings sheet product types
+            _df_sav = pd.read_excel(io.BytesIO(f2_bytes), sheet_name='מוצרי חיסכון')
+            _sav_types = sorted(_df_sav['סוג מוצר'].dropna().unique().tolist())
+            _sav_products = sorted(_df_sav[_df_sav['סוג מוצר'].isin(SAVINGS_TYPES)]['מוצר'].dropna().unique().tolist()) if 'מוצר' in _df_sav.columns else []
             agents = sorted(merged['מת"ל'].dropna().unique().tolist())
             month_label = f'{f1.name[:10]} ← {f2.name[:10]}'
         except Exception as e:
             st.error(f"שגיאה בקריאת הקבצים: {e}")
             st.stop()
+
+    # ── DEBUG expander ──
+    with st.expander("🔧 debug — סוגי מוצרים בגיליון חיסכון", expanded=False):
+        st.write("**כל סוגי המוצרים בגיליון:**", _sav_types)
+        st.write("**מוצרים שעוברים את הסינון (SAVINGS_TYPES):**", _sav_products)
 
     # ── Summary metrics ──
     st.subheader("📈 סיכום")
