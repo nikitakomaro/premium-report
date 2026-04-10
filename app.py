@@ -583,22 +583,13 @@ if f1 and f2:
             f2_bytes = f2.read()
             merged, result, gone_df, new_df, df1d, df2d = analyze(f1_bytes, f2_bytes)
             fee_exceptions, fee_breakdown = analyze_management_fees(f2_bytes)
-            # DEBUG — show savings sheet product types
-            _df_sav = pd.read_excel(io.BytesIO(f2_bytes), sheet_name='מוצרי חיסכון')
-            _sav_types = sorted(_df_sav['סוג מוצר'].dropna().unique().tolist())
-            _sav_products = sorted(_df_sav[_df_sav['סוג מוצר'].isin(SAVINGS_TYPES)]['מוצר'].dropna().unique().tolist()) if 'מוצר' in _df_sav.columns else []
             agents = sorted(merged['מת"ל'].dropna().unique().tolist())
             month_label = f'{f1.name[:10]} ← {f2.name[:10]}'
         except Exception as e:
             st.error(f"שגיאה בקריאת הקבצים: {e}")
             st.stop()
 
-    # ── DEBUG expander ──
-    with st.expander("🔧 debug — פירוט צבירה לפי לקוח", expanded=False):
-        st.write("**כל סוגי המוצרים בגיליון:**", _sav_types)
-        pivot = fee_breakdown.pivot_table(index=COL_ID, columns='סוג מוצר', values='צבירה', aggfunc='sum', fill_value=0)
-        pivot['סה"כ'] = pivot.sum(axis=1)
-        st.dataframe(pivot.reset_index(), use_container_width=True)
+
 
     # ── Summary metrics ──
     st.subheader("📈 סיכום")
