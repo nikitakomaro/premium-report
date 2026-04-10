@@ -521,15 +521,14 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
                 ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
             ]
-            # צבע לפי קבוצת לקוח — כל לקוח קבל צבע אחיד, מתחלף בין לקוח ללקוח
-            group_colors = [colors.white, colors.HexColor('#FFF0E0')]
-            prev_id, group_idx = None, -1
+            # צבע לפי קבוצת סף — כל רמת צבירה בצבע ייחודי
+            def row_color(total):
+                if total > 1_000_000: return colors.HexColor('#D6EAF8')  # תכלת — מעל 1M
+                if total > 500_000:   return colors.HexColor('#FEF9E7')  # צהוב — מעל 500K
+                if total > 250_000:   return colors.HexColor('#E9F7EF')  # ירוק — מעל 250K
+                return colors.HexColor('#FDEDEC')                         # ורוד — מתחת 250K
             for i, (_, row) in enumerate(fe.iterrows(), 1):
-                cid = row.get(COL_ID, '')
-                if cid != prev_id:
-                    group_idx = (group_idx + 1) % 2
-                    prev_id = cid
-                fts.append(('BACKGROUND', (0,i), (-1,i), group_colors[group_idx]))
+                fts.append(('BACKGROUND', (0,i), (-1,i), row_color(row.get('צבירה כוללת', 0))))
             ft.setStyle(TableStyle(fts))
             story.append(ft)
         except Exception as e:
