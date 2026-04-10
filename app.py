@@ -164,6 +164,18 @@ def analyze_pension_fees(file2_bytes):
     df[COL_ID]                    = df[COL_ID].astype(str).str.strip()
     df['שם לקוח']                = df['שם פרטי לקוח'].fillna('') + ' ' + df['שם משפחה לקוח'].fillna('')
 
+    # קיצור שמות סוג מוצר
+    PENSION_SHORT = {
+        'קרן פנסיה חדשה מקיפה': 'פנסיה מקיפה',
+        'קרן פנסיה חדשה כללית': 'פנסיה כללית',
+        'קרן פנסיה ותיקה':       'פנסיה ותיקה',
+    }
+    df['סוג מוצר'] = df['סוג מוצר'].replace(PENSION_SHORT)
+
+    # שם החברה — עמודת יצרן
+    if 'יצרן' not in df.columns and 'שם יצרן' in df.columns:
+        df['יצרן'] = df['שם יצרן']
+
     # ── טבלה 1: חריגות דמי ניהול מהפקדה (>2%) ──
     exc1 = df[
         df['דמי ניהול מהפקדה'].notna() &
@@ -811,7 +823,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                     ('שם לקוח',    'שם לקוח',               lambda v: rh(str(v))),
                     ('מת"ל',       COL_AGENT,                lambda v: rh(str(v))),
                     ('סוג מוצר',   'סוג מוצר',              lambda v: rh(str(v))),
-                    ('מוצר',       'מוצר',                   lambda v: rh(str(v))),
+                    ('חברה',       'יצרן',                   lambda v: rh(str(v))),
                     ('צבירה',      'צבירה',                  lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
                     ('דמי הפקדה',  'דמי ניהול מהפקדה',      lambda v: f"{float(v)*100:.3f}%" if pd.notna(v) and v!='' else '—'),
                 ])
@@ -822,6 +834,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                     ('שם לקוח',    'שם לקוח',               lambda v: rh(str(v))),
                     ('מת"ל',       COL_AGENT,                lambda v: rh(str(v))),
                     ('סוג מוצר',   'סוג מוצר',              lambda v: rh(str(v))),
+                    ('חברה',       'יצרן',                   lambda v: rh(str(v))),
                     ('צבירה',      'צבירה',                  lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
                     ('צבירה כוללת','צבירה כוללת',            lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
                     ('דמי צבירה',  'דמי ניהול מצבירה',      lambda v: f"{float(v)*100:.3f}%" if pd.notna(v) and v!='' else '—'),
@@ -971,7 +984,7 @@ if f1 and f2:
             st.markdown(f"**טבלה 1 — חריגות דמי ניהול מהפקדה ({len(pension_deposit_exc)} מוצרים)**")
             st.markdown("""<div style="background:#4A1A6B;border-radius:8px;padding:10px 14px;border:2px solid #9B59B6;text-align:right;direction:rtl;margin-bottom:10px;color:#E8DAEF;">
             🔵 לקוחות שמשלמים יותר מ-2% דמי ניהול מהפקדה</div>""", unsafe_allow_html=True)
-            p1 = pension_deposit_exc[[c for c in ['שם לקוח', COL_AGENT, 'סוג מוצר', 'מוצר', 'צבירה', 'דמי ניהול מהפקדה'] if c in pension_deposit_exc.columns]].copy()
+            p1 = pension_deposit_exc[[c for c in ['שם לקוח', COL_AGENT, 'סוג מוצר', 'יצרן', 'מוצר', 'צבירה', 'דמי ניהול מהפקדה'] if c in pension_deposit_exc.columns]].copy()
             if 'צבירה' in p1.columns: p1['צבירה'] = p1['צבירה'].map(lambda x: f"₪{x:,.0f}")
             if 'דמי ניהול מהפקדה' in p1.columns: p1['דמי ניהול מהפקדה'] = p1['דמי ניהול מהפקדה'].map(lambda x: f"{x*100:.3f}%")
             st.dataframe(p1, use_container_width=True, hide_index=True)
@@ -980,7 +993,7 @@ if f1 and f2:
             st.markdown(f"**טבלה 2 — חריגות דמי ניהול מצבירה ({len(pension_acc_exc)} מוצרים)**")
             st.markdown("""<div style="background:#154360;border-radius:8px;padding:10px 14px;border:2px solid #2E86C1;text-align:right;direction:rtl;margin-bottom:10px;color:#D6EAF8;">
             🔷 לקוחות שמשלמים דמי ניהול מצבירה מעל הסף לפי גובה הצבירה</div>""", unsafe_allow_html=True)
-            p2 = pension_acc_exc[[c for c in ['שם לקוח', COL_AGENT, 'סוג מוצר', 'מוצר', 'צבירה', 'צבירה כוללת', 'דמי ניהול מצבירה', 'סף מקסימלי', 'סיבת חריגה'] if c in pension_acc_exc.columns]].copy()
+            p2 = pension_acc_exc[[c for c in ['שם לקוח', COL_AGENT, 'סוג מוצר', 'יצרן', 'מוצר', 'צבירה', 'צבירה כוללת', 'דמי ניהול מצבירה', 'סף מקסימלי', 'סיבת חריגה'] if c in pension_acc_exc.columns]].copy()
             if 'צבירה' in p2.columns: p2['צבירה'] = p2['צבירה'].map(lambda x: f"₪{x:,.0f}")
             if 'צבירה כוללת' in p2.columns: p2['צבירה כוללת'] = p2['צבירה כוללת'].map(lambda x: f"₪{x:,.0f}")
             if 'דמי ניהול מצבירה' in p2.columns: p2['דמי ניהול מצבירה'] = p2['דמי ניהול מצבירה'].map(lambda x: f"{x*100:.3f}%")
