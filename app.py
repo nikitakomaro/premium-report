@@ -881,13 +881,19 @@ def check_password():
     if st.session_state.authenticated:
         return True
     st.markdown("""
-    <div style="max-width:400px;margin:80px auto 32px auto;text-align:center;direction:rtl">
-        <div style="font-size:3.5rem;margin-bottom:12px">💼</div>
-        <h1 style="color:#1F4E79;font-size:1.9rem;font-weight:700;margin-bottom:6px;letter-spacing:-0.5px">
+    <div style="max-width:400px;margin:80px auto 32px auto;text-align:center;direction:ltr">
+        <div style="display:inline-flex;align-items:center;justify-content:center;
+                    width:80px;height:80px;border-radius:20px;margin-bottom:16px;
+                    background:linear-gradient(135deg,#1F4E79 0%,#2E86C1 60%,#5DADE2 100%);
+                    box-shadow:0 8px 24px rgba(31,78,121,0.35)">
+            <span style="font-size:2.2rem;line-height:1">📋</span>
+        </div>
+        <h1 style="color:#1F4E79;font-size:2rem;font-weight:800;margin:0 0 6px 0;
+                   letter-spacing:-0.5px;text-align:center">
             PortfolioPro
         </h1>
-        <p style="color:#5D7FA3;font-size:0.95rem;margin-bottom:0">
-            ניתוח ודוחות חכמים לתיק הביטוח שלך
+        <p style="color:#5D7FA3;font-size:0.95rem;margin:0;text-align:center;direction:rtl">
+            ניתוח ודוחות חכמים לתיק הלקוחות שלך
         </p>
         <hr style="border:none;border-top:2px solid #E8EEF4;margin:20px 0 0 0">
     </div>
@@ -909,7 +915,7 @@ check_password()
 # UI
 # ══════════════════════════════════════════════════════════════════════════════
 st.title("💼 PortfolioPro")
-st.markdown("העלה את שני דוחות ה-Excel מ-Surense וקבל דוחות מוכנים להורדה.")
+st.markdown("העלה את שני דוחות ה-Excel מ-Surense וקבל דוחות מוכנים להורדה.", unsafe_allow_html=False)
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
