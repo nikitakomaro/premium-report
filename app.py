@@ -89,6 +89,52 @@ CTR  = Alignment(horizontal='center', vertical='center')
 RGT  = Alignment(horizontal='right',  vertical='center')
 DFNT = Font(name='Arial', size=10)
 
+SAVINGS_TYPES = ['קרן השתלמות', 'קופת גמל לתגמולים ופיצויים', 'קופת גמל להשקעה']
+
+def get_fee_threshold(total_savings):
+    if total_savings > 1_000_000:
+        return 0.0065
+    elif total_savings > 500_000:
+        return 0.007
+    elif total_savings > 250_000:
+        return 0.0075
+    else:
+        return 0.008
+
+def get_fee_reason(total_savings):
+    if total_savings > 1_000_000:
+        return 'צבירה מעל ₪1,000,000 — מקסימום 0.65%'
+    elif total_savings > 500_000:
+        return 'צבירה מעל ₪500,000 — מקסימום 0.70%'
+    elif total_savings > 250_000:
+        return 'צבירה מעל ₪250,000 — מקסימום 0.75%'
+    else:
+        return 'דמי ניהול מעל 0.80%'
+
+def analyze_management_fees(file2_bytes):
+    df = pd.read_excel(io.BytesIO(file2_bytes), sheet_name='מוצרי חיסכון')
+    df = df[df['סוג מוצר'].isin(SAVINGS_TYPES)].copy()
+    df = df[df['סטטוס מוצר'] == 'פעיל'].copy()
+    df['צבירה']               = pd.to_numeric(df['צבירה'], errors='coerce').fillna(0)
+    df['דמי ניהול מצבירה']   = pd.to_numeric(df['דמי ניהול מצבירה'], errors='coerce')
+    df[COL_ID]                 = df[COL_ID].astype(str).str.strip()
+
+    savings_per_customer = df.groupby(COL_ID)['צבירה'].sum().reset_index()
+    savings_per_customer.columns = [COL_ID, 'צבירה כוללת']
+
+    df = df.merge(savings_per_customer, on=COL_ID)
+    df['סף מקסימלי'] = df['צבירה כוללת'].apply(get_fee_threshold)
+    df['סיבת חריגה'] = df['צבירה כוללת'].apply(get_fee_reason)
+
+    exceptions = df[
+        df['דמי ניהול מצבירה'].notna() &
+        (df['דמי ניהול מצבירה'] > df['סף מקסימלי'])
+    ].copy()
+
+    exceptions['שם לקוח'] = exceptions['שם פרטי לקוח'].fillna('') + ' ' + exceptions['שם משפחה לקוח'].fillna('')
+    exceptions = exceptions.sort_values('צבירה כוללת', ascending=False).reset_index(drop=True)
+    return exceptions
+
 def analyze(file1_bytes, file2_bytes):
     df1 = pd.read_excel(io.BytesIO(file1_bytes), sheet_name=SHEET)
     df2 = pd.read_excel(io.BytesIO(file2_bytes), sheet_name=SHEET)
@@ -123,7 +169,7 @@ def analyze(file1_bytes, file2_bytes):
     return merged, result, gone_df, new_df, df1d, df2d
 
 # ── Excel builder ─────────────────────────────────────────────────────────────
-def build_excel(merged, result, gone_df, new_df, agent=None):
+def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None):
     wb = Workbook()
     HDR = PatternFill('solid', start_color='1F4E79')
     HF  = Font(name='Arial', bold=True, color='FFFFFF', size=11)
@@ -234,12 +280,45 @@ def build_excel(merged, result, gone_df, new_df, agent=None):
     ws4 = wb.create_sheet('פוליסות חדשות')
     policy_sheet(ws4, f'פוליסות חדשות{label}', n, '1A5C1A')
 
+    # Sheet 5 — management fee exceptions (only in combined report)
+    if fee_exceptions is not None and len(fee_exceptions) > 0 and agent is None:
+        ws5 = wb.create_sheet('חריגות דמי ניהול')
+        ws5.sheet_view.rightToLeft = True
+        hdrs5 = ['ת.ז','שם לקוח','סוג מוצר','מוצר','יצרן','צבירה כוללת (₪)','צבירה מוצר (₪)','דמי ניהול בפועל','סף מקסימלי','חריגה','מת"ל','סיבת חריגה']
+        wids5 = [14,22,18,26,22,16,16,16,14,12,18,28]
+        ORANGE = PatternFill('solid', start_color='FF6600')
+        for ci, (h, w) in enumerate(zip(hdrs5, wids5), 1):
+            c = ws5.cell(row=1, column=ci, value=h)
+            c.font = Font(name='Arial', bold=True, color='FFFFFF', size=10)
+            c.fill = ORANGE; c.alignment = CTR; c.border = BORD
+            ws5.column_dimensions[get_column_letter(ci)].width = w
+        ws5.row_dimensions[1].height = 22
+        ws5.freeze_panes = 'A2'
+        ws5.auto_filter.ref = f'A1:{get_column_letter(len(hdrs5))}1'
+        LORG = PatternFill('solid', start_color='FFF0E0')
+        for ri, (_, row) in enumerate(fee_exceptions.iterrows()):
+            fee    = row.get('דמי ניהול מצבירה', 0) or 0
+            thresh = row.get('סף מקסימלי', 0) or 0
+            excess = (fee - thresh) * 100
+            fill   = LORG if ri % 2 == 0 else None
+            vals   = [row.get(COL_ID,''), row.get('שם לקוח',''),
+                      row.get('סוג מוצר',''), row.get('מוצר',''), row.get('יצרן',''),
+                      row.get('צבירה כוללת',0), row.get('צבירה',0),
+                      fee, thresh, excess/100, row.get('מת"ל',''), row.get('סיבת חריגה','')]
+            fmts   = [None,None,None,None,None,'#,##0','#,##0','0.000%','0.000%','0.000%',None,None]
+            for ci, (val, fmt) in enumerate(zip(vals, fmts), 1):
+                c = ws5.cell(row=ri+2, column=ci, value=val)
+                c.font = DFNT; c.border = BORD
+                c.alignment = CTR if ci in [1,8,9,10] else RGT
+                if fill: c.fill = fill
+                if fmt:  c.number_format = fmt
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 # ── PDF builder ───────────────────────────────────────────────────────────────
-def build_pdf(merged, result, gone_df, new_df, month_label, agent=None):
+def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exceptions=None):
     _register_font()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -315,6 +394,39 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None):
         mt.setStyle(TableStyle(ts))
         story.append(mt)
 
+    # Fee exceptions section (combined report only)
+    if fee_exceptions is not None and len(fee_exceptions) > 0 and agent is None:
+        story.append(Spacer(1, 0.5*cm))
+        story.append(Paragraph(rh(f'חריגות דמי ניהול — חיסכון ({len(fee_exceptions)})'), sec_s))
+        fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('צבירה כוללת'),
+              rh('דמי ניהול'), rh('סף מקסימלי'), rh('סיבת חריגה')]
+        fd = [fh]
+        for _, row in fee_exceptions.iterrows():
+            fee    = row.get('דמי ניהול מצבירה', 0) or 0
+            thresh = row.get('סף מקסימלי', 0) or 0
+            fd.append([
+                rh(str(row.get(COL_ID,''))),
+                rh(str(row.get('שם לקוח',''))),
+                rh(str(row.get('סוג מוצר',''))),
+                f"₪{row.get('צבירה כוללת',0):,.0f}",
+                f"{fee*100:.3f}%",
+                f"{thresh*100:.2f}%",
+                rh(str(row.get('סיבת חריגה','')))
+            ])
+        ft = Table(fd, colWidths=[2.0*cm,3.2*cm,2.8*cm,2.5*cm,2.0*cm,2.0*cm,4.0*cm], repeatRows=1)
+        fts = [
+            ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FF6600')),
+            ('TEXTCOLOR', (0,0),(-1,0),colors.white),
+            ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
+            ('FONTSIZE',  (0,0),(-1,0),8),('FONTSIZE',(0,1),(-1,-1),7),
+            ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
+            ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
+            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+            ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#FFF0E0')]),
+        ]
+        ft.setStyle(TableStyle(fts))
+        story.append(ft)
+
     doc.build(story)
     return buf.getvalue()
 
@@ -365,7 +477,10 @@ if f1 and f2:
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     with st.spinner("מנתח נתונים..."):
         try:
-            merged, result, gone_df, new_df, df1d, df2d = analyze(f1.read(), f2.read())
+            f1_bytes = f1.read()
+            f2_bytes = f2.read()
+            merged, result, gone_df, new_df, df1d, df2d = analyze(f1_bytes, f2_bytes)
+            fee_exceptions = analyze_management_fees(f2_bytes)
             agents = sorted(merged['מת"ל'].dropna().unique().tolist())
             month_label = f'{f1.name[:10]} ← {f2.name[:10]}'
         except Exception as e:
@@ -418,6 +533,21 @@ if f1 and f2:
         preview['עלייה ₪'] = preview['עלייה ₪'].map(lambda x: f"₪{x:,.0f}")
         st.dataframe(preview, use_container_width=True, hide_index=True)
 
+    # ── Fee exceptions preview ──
+    if len(fee_exceptions) > 0:
+        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+        st.subheader(f"🚨 חריגות דמי ניהול — {len(fee_exceptions)} מוצרים")
+        st.markdown(f"""
+        <div style="background:#FFF0E0;border-radius:10px;padding:12px 16px;border:2px solid #FF6600;text-align:right;direction:rtl;margin-bottom:12px">
+        🔶 נמצאו לקוחות שמשלמים דמי ניהול מצבירה מעל הסף המותר לפי גובה הצבירה שלהם
+        </div>
+        """, unsafe_allow_html=True)
+        fee_preview = fee_exceptions[['שם לקוח','מת"ל','סוג מוצר','צבירה כוללת','דמי ניהול מצבירה','סף מקסימלי','סיבת חריגה']].copy()
+        fee_preview['צבירה כוללת']        = fee_preview['צבירה כוללת'].map(lambda x: f"₪{x:,.0f}")
+        fee_preview['דמי ניהול מצבירה']   = fee_preview['דמי ניהול מצבירה'].map(lambda x: f"{x*100:.3f}%")
+        fee_preview['סף מקסימלי']          = fee_preview['סף מקסימלי'].map(lambda x: f"{x*100:.2f}%")
+        st.dataframe(fee_preview, use_container_width=True, hide_index=True)
+
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
     # ── Downloads ──
@@ -425,8 +555,8 @@ if f1 and f2:
 
     # Combined
     with st.spinner("בונה דוח כולל..."):
-        xl_all  = build_excel(merged, result, gone_df, new_df)
-        pdf_all = build_pdf(merged, result, gone_df, new_df, month_label)
+        xl_all  = build_excel(merged, result, gone_df, new_df, fee_exceptions=fee_exceptions)
+        pdf_all = build_pdf(merged, result, gone_df, new_df, month_label, fee_exceptions=fee_exceptions)
 
     st.markdown("**דוח כולל — כל הסוכנים**")
     ca, cb = st.columns(2)
