@@ -111,11 +111,11 @@ def get_fee_threshold(total_savings):
 
 def get_fee_reason(total_savings):
     if total_savings > 1_000_000:
-        return 'צבירה מעל ₪1,000,000 — מקסימום 0.65%'
+        return 'מעל ₪1M — מקס׳ 0.65%'
     elif total_savings > 500_000:
-        return 'צבירה מעל ₪500,000 — מקסימום 0.70%'
+        return 'מעל ₪500K — מקס׳ 0.70%'
     elif total_savings > 250_000:
-        return 'צבירה מעל ₪250,000 — מקסימום 0.75%'
+        return 'מעל ₪250K — מקס׳ 0.75%'
     else:
         return 'דמי ניהול מעל 0.80%'
 
@@ -521,9 +521,15 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
                 ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
             ]
-            for i in range(1, len(fd)):
-                bg = colors.HexColor('#FFF0E0') if i % 2 == 0 else colors.white
-                fts.append(('BACKGROUND',(0,i),(-1,i),bg))
+            # צבע לפי קבוצת לקוח — כל לקוח קבל צבע אחיד, מתחלף בין לקוח ללקוח
+            group_colors = [colors.white, colors.HexColor('#FFF0E0')]
+            prev_id, group_idx = None, -1
+            for i, (_, row) in enumerate(fe.iterrows(), 1):
+                cid = row.get(COL_ID, '')
+                if cid != prev_id:
+                    group_idx = (group_idx + 1) % 2
+                    prev_id = cid
+                fts.append(('BACKGROUND', (0,i), (-1,i), group_colors[group_idx]))
             ft.setStyle(TableStyle(fts))
             story.append(ft)
         except Exception as e:
