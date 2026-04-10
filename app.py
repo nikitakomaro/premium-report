@@ -534,7 +534,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
     _register_font()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
-                            rightMargin=1.5*cm, leftMargin=1.5*cm,
+                            rightMargin=1.0*cm, leftMargin=1.0*cm,
                             topMargin=2*cm, bottomMargin=2*cm)
     title_s = ParagraphStyle('t', fontName=BASE_FONT, fontSize=16,
                               textColor=colors.HexColor('#1F4E79'), spaceAfter=4, alignment=2)
@@ -813,7 +813,9 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 for _, row in rows_list:
                     td.append([fmt(row.get(k,'')) for _,k,fmt in cols_def])
                 # רוחבי עמודות: ת.ז | שם לקוח | מת"ל | סוג מוצר | חברה | צבירה | צבירה כוללת | דמי צבירה | סיבת חריגה
-                col_ws = [1.8*cm, 2.8*cm, 3.2*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.5*cm, 1.5*cm]
+                # ת.ז | שם לקוח | מת"ל | סוג מוצר | חברה | צבירה | צבירה כוללת | דמי צבירה | סיבת חריגה
+                # סה"כ ~19cm (A4 עם שוליים 1cm)
+                col_ws = [1.8*cm, 2.8*cm, 2.5*cm, 1.8*cm, 2.0*cm, 1.9*cm, 1.9*cm, 1.5*cm, 2.8*cm]
                 t = Table(td, colWidths=col_ws[:len(cols_def)], repeatRows=1)
                 ts = [
                     ('BACKGROUND',(0,0),(-1,0),colors.HexColor(hdr_color)),
