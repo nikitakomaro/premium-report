@@ -710,14 +710,25 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
 
             story.append(Paragraph(rh(f'מוצרים עם חריגה בדמי ניהול ({len(fe)})'), sec_s))
             def _shorten_company(name):
-                """שומר רק את המילה/ות הראשונות לפני שם המוצר, ומחליף אינטרגמל במור"""
+                """מחזיר רק שם החברה — ללא שם המוצר"""
                 if pd.isna(name): return ''
                 s = str(name).strip()
                 s = re.sub(r'(?i)אינטרגמל', 'מור', s)
-                # הסר סיומות כמו "השתלמות", "קופות גמל", "להשקעה" וכו'
+                # מיפוי ידוע: חברות עם שם מרובה מילים
+                known_multi = [
+                    (r'^ילין\s+לפידות\b', 'ילין לפידות'),
+                    (r'^מנורה\s+מבטחים\b', 'מנורה מבטחים'),
+                ]
+                for pat, rep in known_multi:
+                    if re.match(pat, s):
+                        return rep
+                # חברות עם מילה ראשונה בלבד
+                known_single = ['מור', 'אקסלנס', 'הראל', 'מגדל', 'כלל', 'פסגות', 'מיטב', 'אנליסט', 'איילון']
+                first_word = s.split()[0] if s.split() else s
+                if first_word in known_single:
+                    return first_word
+                # fallback — הסר סיומות מוצר
                 s = re.sub(r'\s+(השתלמות|קופות?\s+גמל|קופת\s+גמל|להשקעה|גמל|לתגמולים.*|ופיצויים.*)$', '', s).strip()
-                # אם נשאר "מור קופת" / "מור קופת גמל" — הפוך ל"מור"
-                s = re.sub(r'^מור\b.*', 'מור', s)
                 return s
 
             fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('חברה'),
