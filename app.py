@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import os
+import re
 import warnings
 import tempfile
 from datetime import datetime
@@ -175,6 +176,17 @@ def analyze_pension_fees(file2_bytes):
     # שם החברה — עמודת יצרן
     if 'יצרן' not in df.columns and 'שם יצרן' in df.columns:
         df['יצרן'] = df['שם יצרן']
+
+    # קיצור שם החברה — הסרת "פנסיה וגמל בע״מ" וכיו"ב
+    def _shorten_company(name):
+        if pd.isna(name):
+            return name
+        s = str(name)
+        s = re.sub(r'\s*פנסיה\s+וגמל\s+בע["\u05f4\u2019]?מ', '', s)
+        s = re.sub(r'\s*בע["\u05f4\u2019]?מ\.?$', '', s)
+        return s.strip()
+    if 'יצרן' in df.columns:
+        df['יצרן'] = df['יצרן'].apply(_shorten_company)
 
     # ── טבלה 1: חריגות דמי ניהול מהפקדה (>2%) ──
     exc1 = df[
@@ -796,7 +808,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 rows_list = list(df_p.iterrows())
                 for _, row in rows_list:
                     td.append([fmt(row.get(k,'')) for _,k,fmt in cols_def])
-                col_ws = [2.0*cm, 3.0*cm, 2.0*cm, 2.5*cm, 2.5*cm, 2.0*cm, 2.0*cm, 3.5*cm]
+                col_ws = [2.0*cm, 3.0*cm, 2.0*cm, 2.0*cm, 2.5*cm, 2.0*cm, 2.0*cm, 1.8*cm, 3.0*cm]
                 t = Table(td, colWidths=col_ws[:len(cols_def)], repeatRows=1)
                 ts = [
                     ('BACKGROUND',(0,0),(-1,0),colors.HexColor(hdr_color)),
