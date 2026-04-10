@@ -166,6 +166,17 @@ def analyze_gold_customers(file2_bytes):
     # פירוט לפי סוג מוצר לכל לקוח
     by_type = df.groupby([COL_ID, 'סוג מוצר'])['צבירה'].sum().unstack(fill_value=0).reset_index()
 
+    # דמי ניהול ממוצע משוקלל לפי לקוח
+    df['דמי ניהול מצבירה'] = pd.to_numeric(df['דמי ניהול מצבירה'], errors='coerce')
+    fee_df = df.dropna(subset=['דמי ניהול מצבירה']).copy()
+    if len(fee_df) > 0:
+        fee_df['weighted'] = fee_df['דמי ניהול מצבירה'] * fee_df['צבירה']
+        fee_agg = fee_df.groupby(COL_ID).agg(weighted=('weighted','sum'), total=('צבירה','sum')).reset_index()
+        fee_agg['דמי ניהול ממוצע'] = fee_agg['weighted'] / fee_agg['total'].replace(0, float('nan'))
+        fee_agg = fee_agg[[COL_ID, 'דמי ניהול ממוצע']]
+    else:
+        fee_agg = pd.DataFrame(columns=[COL_ID, 'דמי ניהול ממוצע'])
+
     # פרטי לקוח (שם, סוכן) — שורה ראשונה לכל לקוח
     details = df.sort_values('צבירה', ascending=False).groupby(COL_ID, sort=False).agg(
         שם_פרטי  = ('שם פרטי לקוח',  'first'),
@@ -176,6 +187,7 @@ def analyze_gold_customers(file2_bytes):
 
     result = totals.merge(details[[COL_ID, 'שם לקוח', 'agent']], on=COL_ID)
     result = result.merge(by_type, on=COL_ID, how='left')
+    result = result.merge(fee_agg, on=COL_ID, how='left')
 
     # רק מעל מיליון
     result = result[result['צבירה כוללת'] > 1_000_000].copy()
@@ -367,8 +379,10 @@ def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None
         ws6 = wb.create_sheet('לקוחות זהב')
         ws6.sheet_view.rightToLeft = True
         gold_type_cols = [c for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה'] if c in gold_customers.columns]
+        has_fee_col = 'דמי ניהול ממוצע' in gold_customers.columns
         hdrs6 = ['ת.ז', 'שם לקוח', 'מת"ל', 'צבירה כוללת (₪)'] + [f'{c} (₪)' for c in gold_type_cols]
-        wids6 = [14, 24, 18, 18] + [18]*len(gold_type_cols)
+        if has_fee_col: hdrs6.append('דמי ניהול ממוצע')
+        wids6 = [14, 24, 18, 18] + [18]*len(gold_type_cols) + ([14] if has_fee_col else [])
         GOLD_H = PatternFill('solid', start_color='FFD700')
         GOLD_R = PatternFill('solid', start_color='FFFACD')
         for ci, (h, w) in enumerate(zip(hdrs6, wids6), 1):
@@ -383,7 +397,8 @@ def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None
             fill = GOLD_R if ri % 2 == 0 else None
             vals = [row.get(COL_ID,''), row.get('שם לקוח',''), row.get(COL_AGENT,''),
                     row.get('צבירה כוללת', 0)] + [row.get(c, 0) for c in gold_type_cols]
-            fmts = [None, None, None] + ['#,##0'] * (len(gold_type_cols) + 1)
+            if has_fee_col: vals.append(row.get('דמי ניהול ממוצע', None))
+            fmts = [None, None, None] + ['#,##0'] * (len(gold_type_cols) + 1) + (['0.000%'] if has_fee_col else [])
             for ci, (val, fmt) in enumerate(zip(vals, fmts), 1):
                 c = ws6.cell(row=ri+2, column=ci, value=val)
                 c.font = DFNT; c.border = BORD
@@ -607,8 +622,14 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
             story += page_header('לקוחות זהב — צבירה מעל ₪1,000,000')
             story.append(Paragraph(rh(f'לקוחות עם צבירה כוללת מעל מיליון ש״ח ({len(gc)})'), sec_s))
 
+            # כותרות קצרות לעמודות
+            TYPE_SHORT = {'קרן השתלמות': 'השתלמות', 'קופת גמל': 'קופת גמל', 'קופת גמל להשקעה': 'גמל להשקעה'}
             gold_type_cols = [c for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה'] if c in gc.columns]
-            gh = [rh('ת.ז'), rh('שם לקוח'), rh('מת"ל'), rh('צבירה כוללת')] + [rh(c) for c in gold_type_cols]
+            has_fee = 'דמי ניהול ממוצע' in gc.columns
+            gh = [rh('ת.ז'), rh('שם לקוח'), rh('מת"ל'), rh('צבירה כוללת')]
+            gh += [rh(TYPE_SHORT.get(c, c)) for c in gold_type_cols]
+            if has_fee:
+                gh.append(rh('דמי ניהול'))
             gd = [gh]
             for _, row in gc.iterrows():
                 gr = [
@@ -620,11 +641,13 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 for c in gold_type_cols:
                     v = row.get(c, 0)
                     gr.append(f"₪{v:,.0f}" if v > 0 else '—')
+                if has_fee:
+                    fee_v = row.get('דמי ניהול ממוצע')
+                    gr.append(f"{fee_v*100:.3f}%" if pd.notna(fee_v) else '—')
                 gd.append(gr)
 
             ncols = len(gh)
-            base_w = 17.5 / ncols
-            col_ws = [1.8*cm, 3.5*cm, 2.5*cm] + [2.2*cm] * (ncols - 3)
+            col_ws = [1.8*cm, 3.2*cm, 2.3*cm, 2.2*cm] + [2.0*cm] * (ncols - 4)
 
             gt = Table(gd, colWidths=col_ws, repeatRows=1)
             gts = [
@@ -784,7 +807,7 @@ if f1 and f2:
         </div>
         """, unsafe_allow_html=True)
         gold_cols = ['שם לקוח', COL_AGENT, 'צבירה כוללת']
-        for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה']:
+        for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה', 'דמי ניהול ממוצע']:
             if c in gold_customers.columns:
                 gold_cols.append(c)
         gold_preview = gold_customers[[c for c in gold_cols if c in gold_customers.columns]].copy()
@@ -792,6 +815,8 @@ if f1 and f2:
         for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה']:
             if c in gold_preview.columns:
                 gold_preview[c] = gold_preview[c].map(lambda x: f"₪{x:,.0f}" if x > 0 else '—')
+        if 'דמי ניהול ממוצע' in gold_preview.columns:
+            gold_preview['דמי ניהול ממוצע'] = gold_preview['דמי ניהול ממוצע'].map(lambda x: f"{x*100:.3f}%" if pd.notna(x) else '—')
         st.dataframe(gold_preview, use_container_width=True, hide_index=True)
 
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
