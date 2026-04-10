@@ -652,7 +652,8 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 rh(_shorten_ins(str(row.get(COL_MFG,'')))),
                 f"₪{row.get(COL_PREMIUM,0):,.0f}" if pd.notna(row.get(COL_PREMIUM)) else '—',
             ])
-        gt = Table(gone_d, colWidths=[2.5*cm,4.5*cm,3.0*cm,4.0*cm,3.0*cm], repeatRows=1)
+        gt = Table(gone_d, colWidths=[2.0*cm,3.5*cm,2.5*cm,3.0*cm,2.5*cm],
+                   repeatRows=1, hAlign='CENTER')
         gt.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#7F7F7F')),
             ('TEXTCOLOR', (0,0),(-1,0),colors.white),
@@ -682,7 +683,8 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 rh(_shorten_ins(str(row.get(COL_MFG,'')))),
                 f"₪{row.get(COL_PREMIUM,0):,.0f}" if pd.notna(row.get(COL_PREMIUM)) else '—',
             ])
-        nt = Table(new_d, colWidths=[2.5*cm,4.5*cm,3.0*cm,4.0*cm,3.0*cm], repeatRows=1)
+        nt = Table(new_d, colWidths=[2.0*cm,3.5*cm,2.5*cm,3.0*cm,2.5*cm],
+                   repeatRows=1, hAlign='CENTER')
         nt.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#375623')),
             ('TEXTCOLOR', (0,0),(-1,0),colors.white),
