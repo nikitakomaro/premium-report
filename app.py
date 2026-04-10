@@ -901,10 +901,12 @@ def check_password():
                     box-shadow:0 8px 24px rgba(31,78,121,0.35)">
             <span style="font-size:2.3rem;line-height:1">📋</span>
         </div>
-        <h1 style="color:#1F4E79;font-size:2rem;font-weight:800;margin:0 0 6px 0;letter-spacing:-0.5px">
+        <h1 style="color:#1F4E79;font-size:2rem;font-weight:800;margin:0 0 6px 0;
+                   letter-spacing:-0.5px;text-align:center !important;width:100%">
             PortfolioPro
         </h1>
-        <p style="color:#5D7FA3;font-size:0.95rem;margin:0;direction:rtl">
+        <p style="color:#5D7FA3;font-size:0.95rem;margin:0;
+                  text-align:center !important;direction:rtl;width:100%">
             ניתוח ודוחות חכמים לתיק הלקוחות שלך
         </p>
       </div>
