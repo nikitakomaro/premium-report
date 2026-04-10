@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -344,13 +344,22 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
     g = gone_df[gone_df[COL_AGENT] == agent] if agent else gone_df
     n = new_df[new_df[COL_AGENT] == agent] if agent else new_df
 
+    def page_header(ttl):
+        """Returns title + subtitle paragraphs for the top of each page."""
+        items = [Paragraph(rh(ttl), title_s)]
+        if agent:
+            items.append(Paragraph(rh(f'סוכן: {agent}'), sub_s))
+        items.append(Paragraph(rh(month_label), sub_s))
+        items.append(Paragraph(rh(f'הופק: {datetime.now().strftime("%d/%m/%Y")}'), sub_s))
+        items.append(Spacer(1, 0.3*cm))
+        return items
+
     story = []
-    story.append(Paragraph(rh('דוח עלייה בפרמיה חודשית'), title_s))
-    if agent:
-        story.append(Paragraph(rh(f'סוכן: {agent}'), sub_s))
-    story.append(Paragraph(rh(month_label), sub_s))
-    story.append(Paragraph(rh(f'הופק: {datetime.now().strftime("%d/%m/%Y")}'), sub_s))
-    story.append(Spacer(1, 0.3*cm))
+
+    # ══════════════════════════════════════════════
+    # עמוד 1 — סיכום + חריגות פרמיה
+    # ══════════════════════════════════════════════
+    story += page_header('דוח עלייה בפרמיה חודשית — סיכום וחריגות')
 
     story.append(Paragraph(rh('סיכום'), sec_s))
     sum_data = [[rh('נושא'), rh('ערך')],
@@ -402,10 +411,78 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
         mt.setStyle(TableStyle(ts))
         story.append(mt)
 
-    # Fee exceptions section (combined report only)
+    # ══════════════════════════════════════════════
+    # עמוד 2 — פוליסות שהוסרו + פוליסות חדשות
+    # ══════════════════════════════════════════════
+    story.append(PageBreak())
+    story += page_header('פוליסות שהוסרו ופוליסות חדשות')
+
+    # פוליסות שנסגרו
+    story.append(Paragraph(rh(f'פוליסות שנסגרו ({len(g)})'), sec_s))
+    if len(g) > 0:
+        gone_h = [rh('ת.ז'), rh('שם לקוח'), rh("מס' פוליסה"), rh('יצרן'), rh('פרמיה אחרונה')]
+        gone_d = [gone_h]
+        for _, row in g.iterrows():
+            gone_d.append([
+                rh(str(row.get(COL_ID,''))),
+                rh(str(row.get(COL_FNAME,'')) + ' ' + str(row.get(COL_LNAME,''))),
+                rh(str(row.get(COL_POLICY,''))),
+                rh(str(row.get(COL_MFG,''))),
+                f"₪{row.get(COL_PREMIUM,0):,.0f}" if pd.notna(row.get(COL_PREMIUM)) else '—',
+            ])
+        gt = Table(gone_d, colWidths=[2.5*cm,4.5*cm,3.0*cm,4.0*cm,3.0*cm], repeatRows=1)
+        gt.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#7F7F7F')),
+            ('TEXTCOLOR', (0,0),(-1,0),colors.white),
+            ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
+            ('FONTSIZE',  (0,0),(-1,0),9),('FONTSIZE',(0,1),(-1,-1),8),
+            ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
+            ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
+            ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4),
+            ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#F2F2F2')]),
+        ]))
+        story.append(gt)
+    else:
+        story.append(Paragraph(rh('לא נמצאו פוליסות שנסגרו'), sub_s))
+
+    story.append(Spacer(1, 0.7*cm))
+
+    # פוליסות חדשות
+    story.append(Paragraph(rh(f'פוליסות חדשות ({len(n)})'), sec_s))
+    if len(n) > 0:
+        new_h = [rh('ת.ז'), rh('שם לקוח'), rh("מס' פוליסה"), rh('יצרן'), rh('פרמיה')]
+        new_d = [new_h]
+        for _, row in n.iterrows():
+            new_d.append([
+                rh(str(row.get(COL_ID,''))),
+                rh(str(row.get(COL_FNAME,'')) + ' ' + str(row.get(COL_LNAME,''))),
+                rh(str(row.get(COL_POLICY,''))),
+                rh(str(row.get(COL_MFG,''))),
+                f"₪{row.get(COL_PREMIUM,0):,.0f}" if pd.notna(row.get(COL_PREMIUM)) else '—',
+            ])
+        nt = Table(new_d, colWidths=[2.5*cm,4.5*cm,3.0*cm,4.0*cm,3.0*cm], repeatRows=1)
+        nt.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#375623')),
+            ('TEXTCOLOR', (0,0),(-1,0),colors.white),
+            ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
+            ('FONTSIZE',  (0,0),(-1,0),9),('FONTSIZE',(0,1),(-1,-1),8),
+            ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
+            ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
+            ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4),
+            ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#EBF1DE')]),
+        ]))
+        story.append(nt)
+    else:
+        story.append(Paragraph(rh('לא נמצאו פוליסות חדשות'), sub_s))
+
+    # ══════════════════════════════════════════════
+    # עמוד 3 — חריגות דמי ניהול (רק בדוח כולל)
+    # ══════════════════════════════════════════════
     if fee_exceptions is not None and len(fee_exceptions) > 0 and agent is None:
-        story.append(Spacer(1, 0.5*cm))
-        story.append(Paragraph(rh(f'חריגות דמי ניהול — חיסכון ({len(fee_exceptions)})'), sec_s))
+        story.append(PageBreak())
+        story += page_header('חריגות דמי ניהול — מוצרי חיסכון')
+
+        story.append(Paragraph(rh(f'מוצרים עם חריגה בדמי ניהול ({len(fee_exceptions)})'), sec_s))
         fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('צבירה כוללת'),
               rh('דמי ניהול'), rh('סף מקסימלי'), rh('סיבת חריגה')]
         fd = [fh]
