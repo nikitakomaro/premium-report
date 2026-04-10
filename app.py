@@ -598,13 +598,23 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
     story.append(st_tbl)
     story.append(Spacer(1, 0.5*cm))
 
+    def _shorten_ins(name):
+        """קיצור שם חברת ביטוח — הסרת 'חברה לביטוח בע״מ' וכיו״ב"""
+        if pd.isna(name): return ''
+        s = str(name)
+        s = re.sub(r'\s*חברה\s+לביטוח\s+בע["\u05f4\u2019]?מ', '', s)
+        s = re.sub(r'\s*לביטוח\s+בע["\u05f4\u2019]?מ', '', s)
+        s = re.sub(r'\s*ביטוח\s+בע["\u05f4\u2019]?מ', '', s)
+        s = re.sub(r'\s*בע["\u05f4\u2019]?מ\.?$', '', s)
+        return s.strip()
+
     if len(agent_result) > 0:
         story.append(Paragraph(rh(f'פוליסות עם עלייה >15% ({len(agent_result)})'), sec_s))
-        th = [rh('ת.ז'),rh('שם לקוח'),rh("מס' פוליסה"),rh('יצרן'),
+        th = [rh('ת.ז'),rh('שם לקוח'),rh("מס' פוליסה"),rh('חברה'),
               rh('פרמיה קודמת'),rh('פרמיה נוכחית'),rh('עלייה ₪'),rh('עלייה %')]
         td = [th]
         for _, row in agent_result.iterrows():
-            td.append([rh(row['ת.ז']),rh(row['שם לקוח']),rh(row[COL_POLICY]),rh(row['יצרן']),
+            td.append([rh(row['ת.ז']),rh(row['שם לקוח']),rh(row[COL_POLICY]),rh(_shorten_ins(row['יצרן'])),
                        f"₪{row['פרמיה קודמת']:,.0f}",f"₪{row['פרמיה נוכחית']:,.0f}",
                        f"₪{row['עלייה ₪']:,.0f}",f"{row['עלייה %']:.1f}%"])
         mt = Table(td, colWidths=[2.2*cm,3.5*cm,2.5*cm,3.8*cm,2.3*cm,2.5*cm,2.3*cm,1.8*cm], repeatRows=1)
@@ -630,14 +640,14 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
     # פוליסות שנסגרו
     story.append(Paragraph(rh(f'פוליסות שנסגרו ({len(g)})'), sec_s))
     if len(g) > 0:
-        gone_h = [rh('ת.ז'), rh('שם לקוח'), rh("מס' פוליסה"), rh('יצרן'), rh('פרמיה אחרונה')]
+        gone_h = [rh('ת.ז'), rh('שם לקוח'), rh("מס' פוליסה"), rh('חברה'), rh('פרמיה אחרונה')]
         gone_d = [gone_h]
         for _, row in g.iterrows():
             gone_d.append([
                 rh(str(row.get(COL_ID,''))),
                 rh(str(row.get(COL_FNAME,'')) + ' ' + str(row.get(COL_LNAME,''))),
                 rh(str(row.get(COL_POLICY,''))),
-                rh(str(row.get(COL_MFG,''))),
+                rh(_shorten_ins(str(row.get(COL_MFG,'')))),
                 f"₪{row.get(COL_PREMIUM,0):,.0f}" if pd.notna(row.get(COL_PREMIUM)) else '—',
             ])
         gt = Table(gone_d, colWidths=[2.5*cm,4.5*cm,3.0*cm,4.0*cm,3.0*cm], repeatRows=1)
@@ -660,14 +670,14 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
     # פוליסות חדשות
     story.append(Paragraph(rh(f'פוליסות חדשות ({len(n)})'), sec_s))
     if len(n) > 0:
-        new_h = [rh('ת.ז'), rh('שם לקוח'), rh("מס' פוליסה"), rh('יצרן'), rh('פרמיה')]
+        new_h = [rh('ת.ז'), rh('שם לקוח'), rh("מס' פוליסה"), rh('חברה'), rh('פרמיה')]
         new_d = [new_h]
         for _, row in n.iterrows():
             new_d.append([
                 rh(str(row.get(COL_ID,''))),
                 rh(str(row.get(COL_FNAME,'')) + ' ' + str(row.get(COL_LNAME,''))),
                 rh(str(row.get(COL_POLICY,''))),
-                rh(str(row.get(COL_MFG,''))),
+                rh(_shorten_ins(str(row.get(COL_MFG,'')))),
                 f"₪{row.get(COL_PREMIUM,0):,.0f}" if pd.notna(row.get(COL_PREMIUM)) else '—',
             ])
         nt = Table(new_d, colWidths=[2.5*cm,4.5*cm,3.0*cm,4.0*cm,3.0*cm], repeatRows=1)
