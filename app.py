@@ -807,12 +807,11 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
             def pension_table(df_p, title, hdr_color, cols_def, color_by_savings=False):
                 """cols_def = [(header, col_key, fmt_fn)]"""
                 story.append(Paragraph(rh(title), sec_s))
-                # סגנונות לכותרות ולתאי גוף (עם גלישת טקסט)
+                # סגנונות לכותרות ולתאי גוף (עם גלישת טקסט — ללא RTL כפול)
                 hdr_cell_s = ParagraphStyle('phdr', fontName=BASE_FONT, fontSize=8,
-                                            textColor=colors.white, alignment=2)
+                                            textColor=colors.white, alignment=2, leading=10)
                 body_cell_s = ParagraphStyle('pbody', fontName=BASE_FONT, fontSize=7,
-                                             textColor=colors.black, alignment=2,
-                                             leading=9, wordWrap='RTL')
+                                             textColor=colors.black, alignment=2, leading=9)
                 def _ph(txt): return Paragraph(rh(str(txt)), hdr_cell_s)
                 def _pb(txt): return Paragraph(rh(str(txt)), body_cell_s)
 
