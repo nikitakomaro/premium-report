@@ -413,7 +413,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
               ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
               ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]
         for i,(_, row) in enumerate(agent_result.iterrows(),1):
-            c = colors.HexColor('#FFCCCC') if row['עלייה %']>30 else (colors.HexColor('#FFF2CC') if i%2==0 else colors.white)
+            c = colors.HexColor('#FFCCCC') if row['עלייה %']>30 else colors.HexColor('#EBF3FB')
             ts.append(('BACKGROUND',(0,i),(-1,i),c))
         mt.setStyle(TableStyle(ts))
         story.append(mt)
