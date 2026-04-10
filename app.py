@@ -881,21 +881,34 @@ def check_password():
     if st.session_state.authenticated:
         return True
     st.markdown("""
-    <div style="max-width:400px;margin:80px auto 32px auto;text-align:center;direction:ltr">
+    <style>
+    .login-wrapper {
+        display:flex; flex-direction:column; align-items:center;
+        margin-top:70px; margin-bottom:8px; width:100%;
+    }
+    .login-box {
+        width:340px; text-align:center; direction:ltr;
+    }
+    .login-divider {
+        width:340px; border:none; border-top:2px solid #E8EEF4; margin:20px 0 4px 0;
+    }
+    </style>
+    <div class="login-wrapper">
+      <div class="login-box">
         <div style="display:inline-flex;align-items:center;justify-content:center;
-                    width:80px;height:80px;border-radius:20px;margin-bottom:16px;
+                    width:82px;height:82px;border-radius:20px;margin-bottom:16px;
                     background:linear-gradient(135deg,#1F4E79 0%,#2E86C1 60%,#5DADE2 100%);
                     box-shadow:0 8px 24px rgba(31,78,121,0.35)">
-            <span style="font-size:2.2rem;line-height:1">📋</span>
+            <span style="font-size:2.3rem;line-height:1">📋</span>
         </div>
-        <h1 style="color:#1F4E79;font-size:2rem;font-weight:800;margin:0 0 6px 0;
-                   letter-spacing:-0.5px;text-align:center">
+        <h1 style="color:#1F4E79;font-size:2rem;font-weight:800;margin:0 0 6px 0;letter-spacing:-0.5px">
             PortfolioPro
         </h1>
-        <p style="color:#5D7FA3;font-size:0.95rem;margin:0;text-align:center;direction:rtl">
+        <p style="color:#5D7FA3;font-size:0.95rem;margin:0;direction:rtl">
             ניתוח ודוחות חכמים לתיק הלקוחות שלך
         </p>
-        <hr style="border:none;border-top:2px solid #E8EEF4;margin:20px 0 0 0">
+      </div>
+      <hr class="login-divider">
     </div>
     """, unsafe_allow_html=True)
     col_l, col_m, col_r = st.columns([1,2,1])
