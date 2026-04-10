@@ -929,8 +929,18 @@ check_password()
 # ══════════════════════════════════════════════════════════════════════════════
 # UI
 # ══════════════════════════════════════════════════════════════════════════════
-st.title("💼 PortfolioPro")
-st.markdown("העלה את שני דוחות ה-Excel מ-Surense וקבל דוחות מוכנים להורדה.", unsafe_allow_html=False)
+st.markdown("""
+<div style="display:flex;align-items:center;gap:14px;direction:ltr;margin-bottom:4px">
+    <div style="display:inline-flex;align-items:center;justify-content:center;
+                width:52px;height:52px;border-radius:13px;flex-shrink:0;
+                background:linear-gradient(135deg,#1F4E79 0%,#2E86C1 60%,#5DADE2 100%);
+                box-shadow:0 4px 14px rgba(31,78,121,0.4)">
+        <span style="font-size:1.5rem;line-height:1">📋</span>
+    </div>
+    <h1 style="margin:0;font-size:2rem;font-weight:800;letter-spacing:-0.5px">PortfolioPro</h1>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("העלה את שני דוחות ה-Excel מ-Surense וקבל דוחות מוכנים להורדה.")
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
