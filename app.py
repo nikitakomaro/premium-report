@@ -127,43 +127,28 @@ def analyze_management_fees(file2_bytes):
     df['דמי ניהול מצבירה']   = pd.to_numeric(df['דמי ניהול מצבירה'], errors='coerce')
     df[COL_ID]                 = df[COL_ID].astype(str).str.strip()
 
-    # צבירה כוללת לפי לקוח + סוג מוצר בנפרד (לא מאגדים סוגים שונים יחד)
-    savings_per_type = df.groupby([COL_ID, 'סוג מוצר'])['צבירה'].sum().reset_index()
-    savings_per_type.columns = [COL_ID, 'סוג מוצר', 'צבירה כוללת']
+    # צבירה כוללת לפי לקוח — סכום כל 3 סוגי המוצרים יחד
+    savings_per_customer = df.groupby(COL_ID)['צבירה'].sum().reset_index()
+    savings_per_customer.columns = [COL_ID, 'צבירה כוללת']
 
-    df = df.merge(savings_per_type, on=[COL_ID, 'סוג מוצר'])
+    df = df.merge(savings_per_customer, on=COL_ID)
     df['סף מקסימלי'] = df['צבירה כוללת'].apply(get_fee_threshold)
     df['סיבת חריגה'] = df['צבירה כוללת'].apply(get_fee_reason)
 
+    # שורה נפרדת לכל מוצר עם חריגה
     exc = df[
         df['דמי ניהול מצבירה'].notna() &
         (df['דמי ניהול מצבירה'] > df['סף מקסימלי'])
     ].copy()
     exc['שם לקוח'] = exc['שם פרטי לקוח'].fillna('') + ' ' + exc['שם משפחה לקוח'].fillna('')
-
-    # קיבוץ לפי לקוח — שורה אחת לכל לקוח עם דמי הניהול הגבוהים ביותר
-    prod_col = 'מוצר' if 'מוצר' in exc.columns else None
-    agg = exc.sort_values('דמי ניהול מצבירה', ascending=False).groupby(COL_ID, sort=False).agg(
-        שם_לקוח    = ('שם לקוח',           'first'),
-        agent       = (COL_AGENT,            'first'),
-        סוג_מוצר   = ('סוג מוצר',           lambda x: ' / '.join(x.unique())),
-        שם_מוצר    = (prod_col or 'סוג מוצר', lambda x: ' / '.join(x.dropna().unique())),
-        צבירה_כוללת= ('צבירה כוללת',        'first'),
-        דמי_ניהול  = ('דמי ניהול מצבירה',   'max'),
-        סף_מקסימלי = ('סף מקסימלי',         'first'),
-        סיבת_חריגה = ('סיבת חריגה',         'first'),
-    ).reset_index()
-
-    agg.columns = [COL_ID, 'שם לקוח', COL_AGENT, 'סוג מוצר', 'שם מוצר', 'צבירה כוללת',
-                   'דמי ניהול מצבירה', 'סף מקסימלי', 'סיבת חריגה']
-    agg = agg.sort_values('צבירה כוללת', ascending=False).reset_index(drop=True)
+    exc = exc.sort_values(['צבירה כוללת', 'דמי ניהול מצבירה'], ascending=[False, False]).reset_index(drop=True)
 
     # פירוט צבירה לפי סוג מוצר לכל לקוח חריג (לdebug)
-    exc_ids = agg[COL_ID].tolist()
+    exc_ids = exc[COL_ID].unique().tolist()
     breakdown = df[df[COL_ID].isin(exc_ids)].groupby([COL_ID, 'סוג מוצר'])['צבירה'].sum().reset_index()
     breakdown.columns = [COL_ID, 'סוג מוצר', 'צבירה']
 
-    return agg, breakdown
+    return exc, breakdown
 
 def analyze(file1_bytes, file2_bytes):
     df1 = pd.read_excel(io.BytesIO(file1_bytes), sheet_name=SHEET)
@@ -507,8 +492,8 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
             story += page_header('חריגות דמי ניהול — מוצרי חיסכון')
 
             story.append(Paragraph(rh(f'מוצרים עם חריגה בדמי ניהול ({len(fe)})'), sec_s))
-            fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('צבירה כוללת'),
-                  rh('דמי ניהול'), rh('סף מקסימלי'), rh('סיבת חריגה')]
+            fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('מוצר'),
+                  rh('צבירה'), rh('צבירה כוללת'), rh('דמי ניהול'), rh('סף מקסימלי'), rh('סיבת חריגה')]
             fd = [fh]
             for _, row in fe.iterrows():
                 raw_fee    = row.get('דמי ניהול מצבירה', 0)
@@ -519,12 +504,14 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                     rh(str(row.get(COL_ID,''))),
                     rh(str(row.get('שם לקוח',''))),
                     rh(str(row.get('סוג מוצר',''))),
+                    rh(str(row.get('מוצר',''))),
+                    f"₪{row.get('צבירה',0):,.0f}",
                     f"₪{row.get('צבירה כוללת',0):,.0f}",
                     f"{fee*100:.3f}%",
                     f"{thresh*100:.2f}%",
                     rh(str(row.get('סיבת חריגה','')))
                 ])
-            ft = Table(fd, colWidths=[2.0*cm,3.2*cm,2.8*cm,2.5*cm,2.0*cm,2.0*cm,4.0*cm], repeatRows=1)
+            ft = Table(fd, colWidths=[1.8*cm,2.8*cm,2.4*cm,2.8*cm,1.8*cm,1.9*cm,1.7*cm,1.7*cm,3.6*cm], repeatRows=1)
             fts = [
                 ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FF6600')),
                 ('TEXTCOLOR', (0,0),(-1,0),colors.white),
@@ -668,7 +655,13 @@ if f1 and f2:
         🔶 נמצאו לקוחות שמשלמים דמי ניהול מצבירה מעל הסף המותר לפי גובה הצבירה שלהם
         </div>
         """, unsafe_allow_html=True)
-        fee_preview = fee_exceptions[['שם לקוח','מת"ל','סוג מוצר','שם מוצר','צבירה כוללת','דמי ניהול מצבירה','סף מקסימלי','סיבת חריגה']].copy()
+        cols = ['שם לקוח', COL_AGENT, 'סוג מוצר']
+        if 'מוצר' in fee_exceptions.columns:
+            cols.append('מוצר')
+        cols += ['צבירה', 'צבירה כוללת', 'דמי ניהול מצבירה', 'סף מקסימלי', 'סיבת חריגה']
+        fee_preview = fee_exceptions[[c for c in cols if c in fee_exceptions.columns]].copy()
+        if 'צבירה' in fee_preview.columns:
+            fee_preview['צבירה']           = fee_preview['צבירה'].map(lambda x: f"₪{x:,.0f}")
         fee_preview['צבירה כוללת']        = fee_preview['צבירה כוללת'].map(lambda x: f"₪{x:,.0f}")
         fee_preview['דמי ניהול מצבירה']   = fee_preview['דמי ניהול מצבירה'].map(lambda x: f"{x*100:.3f}%")
         fee_preview['סף מקסימלי']          = fee_preview['סף מקסימלי'].map(lambda x: f"{x*100:.2f}%")
