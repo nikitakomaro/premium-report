@@ -56,9 +56,17 @@ def _register_font():
     global _font_registered, BASE_FONT
     if _font_registered:
         return
-    for fp in ['/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
-                '/Library/Fonts/Arial Unicode.ttf',
-                '/System/Library/Fonts/Supplemental/Arial.ttf']:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(script_dir, 'Alef-Regular.ttf'),
+        '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+        '/Library/Fonts/Arial Unicode.ttf',
+        '/System/Library/Fonts/Supplemental/Arial.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+        '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
+    ]
+    for fp in candidates:
         if os.path.exists(fp):
             try:
                 pdfmetrics.registerFont(TTFont('HebFont', fp))
