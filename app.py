@@ -709,7 +709,16 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
             story += page_header('חריגות דמי ניהול — מוצרי חיסכון')
 
             story.append(Paragraph(rh(f'מוצרים עם חריגה בדמי ניהול ({len(fe)})'), sec_s))
-            fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('מוצר'),
+            def _shorten_company(name):
+                """שומר רק את המילה/ות הראשונות לפני שם המוצר, ומחליף אינטרגמל במור"""
+                if pd.isna(name): return ''
+                s = str(name).strip()
+                s = re.sub(r'(?i)אינטרגמל', 'מור', s)
+                # הסר סיומות כמו "השתלמות", "קופות גמל", "להשקעה" וכו'
+                s = re.sub(r'\s+(השתלמות|קופות?\s+גמל|להשקעה|גמל|לתגמולים.*|ופיצויים.*)$', '', s).strip()
+                return s
+
+            fh = [rh('ת.ז'), rh('שם לקוח'), rh('סוג מוצר'), rh('חברה'),
                   rh('צבירה'), rh('צבירה כוללת'), rh('דמי ניהול'), rh('סף מקסימלי'), rh('סיבת חריגה')]
             fd = [fh]
             for _, row in fe.iterrows():
@@ -721,7 +730,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                     rh(str(row.get(COL_ID,''))),
                     rh(str(row.get('שם לקוח',''))),
                     rh(str(row.get('סוג מוצר',''))),
-                    rh(str(row.get('מוצר',''))),
+                    rh(_shorten_company(str(row.get('מוצר','')))),
                     f"₪{row.get('צבירה',0):,.0f}",
                     f"₪{row.get('צבירה כוללת',0):,.0f}",
                     f"{fee*100:.3f}%",
