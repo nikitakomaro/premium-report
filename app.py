@@ -134,14 +134,27 @@ def analyze_management_fees(file2_bytes):
     df['סף מקסימלי'] = df['צבירה כוללת'].apply(get_fee_threshold)
     df['סיבת חריגה'] = df['צבירה כוללת'].apply(get_fee_reason)
 
-    exceptions = df[
+    exc = df[
         df['דמי ניהול מצבירה'].notna() &
         (df['דמי ניהול מצבירה'] > df['סף מקסימלי'])
     ].copy()
+    exc['שם לקוח'] = exc['שם פרטי לקוח'].fillna('') + ' ' + exc['שם משפחה לקוח'].fillna('')
 
-    exceptions['שם לקוח'] = exceptions['שם פרטי לקוח'].fillna('') + ' ' + exceptions['שם משפחה לקוח'].fillna('')
-    exceptions = exceptions.sort_values('צבירה כוללת', ascending=False).reset_index(drop=True)
-    return exceptions
+    # קיבוץ לפי לקוח — שורה אחת לכל לקוח עם דמי הניהול הגבוהים ביותר
+    agg = exc.sort_values('דמי ניהול מצבירה', ascending=False).groupby(COL_ID, sort=False).agg(
+        שם_לקוח    = ('שם לקוח',           'first'),
+        agent       = (COL_AGENT,            'first'),
+        סוג_מוצר   = ('סוג מוצר',           lambda x: ' / '.join(x.unique())),
+        צבירה_כוללת= ('צבירה כוללת',        'first'),
+        דמי_ניהול  = ('דמי ניהול מצבירה',   'max'),
+        סף_מקסימלי = ('סף מקסימלי',         'first'),
+        סיבת_חריגה = ('סיבת חריגה',         'first'),
+    ).reset_index()
+
+    agg.columns = [COL_ID, 'שם לקוח', COL_AGENT, 'סוג מוצר', 'צבירה כוללת',
+                   'דמי ניהול מצבירה', 'סף מקסימלי', 'סיבת חריגה']
+    agg = agg.sort_values('צבירה כוללת', ascending=False).reset_index(drop=True)
+    return agg
 
 def analyze(file1_bytes, file2_bytes):
     df1 = pd.read_excel(io.BytesIO(file1_bytes), sheet_name=SHEET)
