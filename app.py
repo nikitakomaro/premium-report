@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="מערכת ניהול תיק לקוחות",
+    page_title="PortfolioPro",
     page_icon="💼",
     layout="centered",
 )
@@ -883,8 +883,8 @@ def check_password():
     st.markdown("""
     <div style="max-width:400px;margin:80px auto 32px auto;text-align:center;direction:rtl">
         <div style="font-size:3.5rem;margin-bottom:12px">💼</div>
-        <h1 style="color:#1F4E79;font-size:1.7rem;font-weight:700;margin-bottom:6px">
-            מערכת ניהול תיק לקוחות
+        <h1 style="color:#1F4E79;font-size:1.9rem;font-weight:700;margin-bottom:6px;letter-spacing:-0.5px">
+            PortfolioPro
         </h1>
         <p style="color:#5D7FA3;font-size:0.95rem;margin-bottom:0">
             ניתוח ודוחות חכמים לתיק הביטוח שלך
@@ -908,7 +908,7 @@ check_password()
 # ══════════════════════════════════════════════════════════════════════════════
 # UI
 # ══════════════════════════════════════════════════════════════════════════════
-st.title("💼 מערכת ניהול תיק לקוחות")
+st.title("💼 PortfolioPro")
 st.markdown("העלה את שני דוחות ה-Excel מ-Surense וקבל דוחות מוכנים להורדה.")
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
