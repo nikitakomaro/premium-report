@@ -156,7 +156,13 @@ def analyze_management_fees(file2_bytes):
     agg.columns = [COL_ID, 'שם לקוח', COL_AGENT, 'סוג מוצר', 'שם מוצר', 'צבירה כוללת',
                    'דמי ניהול מצבירה', 'סף מקסימלי', 'סיבת חריגה']
     agg = agg.sort_values('צבירה כוללת', ascending=False).reset_index(drop=True)
-    return agg
+
+    # פירוט צבירה לפי סוג מוצר לכל לקוח חריג (לdebug)
+    exc_ids = agg[COL_ID].tolist()
+    breakdown = df[df[COL_ID].isin(exc_ids)].groupby([COL_ID, 'סוג מוצר'])['צבירה'].sum().reset_index()
+    breakdown.columns = [COL_ID, 'סוג מוצר', 'צבירה']
+
+    return agg, breakdown
 
 def analyze(file1_bytes, file2_bytes):
     df1 = pd.read_excel(io.BytesIO(file1_bytes), sheet_name=SHEET)
@@ -588,7 +594,7 @@ if f1 and f2:
             f1_bytes = f1.read()
             f2_bytes = f2.read()
             merged, result, gone_df, new_df, df1d, df2d = analyze(f1_bytes, f2_bytes)
-            fee_exceptions = analyze_management_fees(f2_bytes)
+            fee_exceptions, fee_breakdown = analyze_management_fees(f2_bytes)
             # DEBUG — show savings sheet product types
             _df_sav = pd.read_excel(io.BytesIO(f2_bytes), sheet_name='מוצרי חיסכון')
             _sav_types = sorted(_df_sav['סוג מוצר'].dropna().unique().tolist())
@@ -600,9 +606,11 @@ if f1 and f2:
             st.stop()
 
     # ── DEBUG expander ──
-    with st.expander("🔧 debug — סוגי מוצרים בגיליון חיסכון", expanded=False):
+    with st.expander("🔧 debug — פירוט צבירה לפי לקוח", expanded=False):
         st.write("**כל סוגי המוצרים בגיליון:**", _sav_types)
-        st.write("**מוצרים שעוברים את הסינון (SAVINGS_TYPES):**", _sav_products)
+        pivot = fee_breakdown.pivot_table(index=COL_ID, columns='סוג מוצר', values='צבירה', aggfunc='sum', fill_value=0)
+        pivot['סה"כ'] = pivot.sum(axis=1)
+        st.dataframe(pivot.reset_index(), use_container_width=True)
 
     # ── Summary metrics ──
     st.subheader("📈 סיכום")
