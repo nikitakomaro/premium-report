@@ -177,12 +177,16 @@ def analyze_pension_fees(file2_bytes):
     if 'יצרן' not in df.columns and 'שם יצרן' in df.columns:
         df['יצרן'] = df['שם יצרן']
 
-    # קיצור שם החברה — הסרת "פנסיה וגמל בע״מ" וכיו"ב
+    # קיצור שם החברה — הסרת "מקפת קרנות פנסיה וגמל", "פנסיה וגמל בע״מ" וכיו"ב
     def _shorten_company(name):
         if pd.isna(name):
             return name
         s = str(name)
-        s = re.sub(r'\s*פנסיה\s+וגמל\s+בע["\u05f4\u2019]?מ', '', s)
+        # הסר הכל מ-"מקפת" ואילך (מגדל מקפת קרנות פנסיה וגמל → מגדל)
+        s = re.sub(r'\s*מקפת\b.*', '', s)
+        # הסר הכל מ-"פנסיה וגמל" ואילך
+        s = re.sub(r'\s*פנסיה\s+וגמל\b.*', '', s)
+        # הסר "בע״מ" שיישאר בסוף
         s = re.sub(r'\s*בע["\u05f4\u2019]?מ\.?$', '', s)
         return s.strip()
     if 'יצרן' in df.columns:
