@@ -771,12 +771,18 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
             story.append(PageBreak())
             story += page_header('חריגות דמי ניהול — קרן פנסיה')
 
-            def pension_table(df_p, title, hdr_color, cols_def):
+            def pension_row_color(total):
+                if total > 1_000_000: return colors.HexColor('#D6EAF8')  # תכלת — מעל 1M
+                if total > 500_000:   return colors.HexColor('#FEF9E7')  # צהוב — מעל 500K
+                return colors.HexColor('#E9F7EF')                         # ירוק — מעל 200K
+
+            def pension_table(df_p, title, hdr_color, cols_def, color_by_savings=False):
                 """cols_def = [(header, col_key, fmt_fn)]"""
                 story.append(Paragraph(rh(title), sec_s))
                 th = [rh(h) for h,_,_ in cols_def]
                 td = [th]
-                for _, row in df_p.iterrows():
+                rows_list = list(df_p.iterrows())
+                for _, row in rows_list:
                     td.append([fmt(row.get(k,'')) for _,k,fmt in cols_def])
                 col_ws = [2.0*cm, 3.0*cm, 2.0*cm, 2.5*cm, 2.5*cm, 2.0*cm, 2.0*cm, 3.5*cm]
                 t = Table(td, colWidths=col_ws[:len(cols_def)], repeatRows=1)
@@ -789,8 +795,11 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                     ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
                     ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
                 ]
-                for i in range(1, len(td)):
-                    bg = colors.HexColor('#F4ECF7') if i%2==1 else colors.HexColor('#EAF2FF')
+                for i, (_, row) in enumerate(rows_list, 1):
+                    if color_by_savings:
+                        bg = pension_row_color(row.get('צבירה כוללת', 0))
+                    else:
+                        bg = colors.HexColor('#F4ECF7') if i%2==1 else colors.HexColor('#EBD5F7')
                     ts.append(('BACKGROUND',(0,i),(-1,i),bg))
                 t.setStyle(TableStyle(ts))
                 story.append(t)
@@ -817,7 +826,7 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                     ('צבירה כוללת','צבירה כוללת',            lambda v: f"₪{v:,.0f}" if pd.notna(v) and v else '—'),
                     ('דמי צבירה',  'דמי ניהול מצבירה',      lambda v: f"{float(v)*100:.3f}%" if pd.notna(v) and v!='' else '—'),
                     ('סיבת חריגה', 'סיבת חריגה',            lambda v: rh(str(v))),
-                ])
+                ], color_by_savings=True)
         except Exception as e:
             story.append(Paragraph(rh(f'שגיאה בטעינת טבלת פנסיה: {e}'), sub_s))
 
