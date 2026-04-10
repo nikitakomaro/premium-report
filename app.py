@@ -623,7 +623,7 @@ if f1 and f2:
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.subheader(f"🚨 חריגות דמי ניהול — {len(fee_exceptions)} מוצרים")
         st.markdown(f"""
-        <div style="background:#FFF0E0;border-radius:10px;padding:12px 16px;border:2px solid #FF6600;text-align:right;direction:rtl;margin-bottom:12px">
+        <div style="background:#7A3000;border-radius:10px;padding:12px 16px;border:2px solid #FF6600;text-align:right;direction:rtl;margin-bottom:12px;color:#FFD6B0;">
         🔶 נמצאו לקוחות שמשלמים דמי ניהול מצבירה מעל הסף המותר לפי גובה הצבירה שלהם
         </div>
         """, unsafe_allow_html=True)
