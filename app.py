@@ -617,7 +617,9 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
             td.append([rh(row['ת.ז']),rh(row['שם לקוח']),rh(row[COL_POLICY]),rh(_shorten_ins(row['יצרן'])),
                        f"₪{row['פרמיה קודמת']:,.0f}",f"₪{row['פרמיה נוכחית']:,.0f}",
                        f"₪{row['עלייה ₪']:,.0f}",f"{row['עלייה %']:.1f}%"])
-        mt = Table(td, colWidths=[2.2*cm,3.5*cm,2.5*cm,3.8*cm,2.3*cm,2.5*cm,2.3*cm,1.8*cm], repeatRows=1)
+        # ת.ז | שם לקוח | מס' פוליסה | חברה | פרמיה קודמת | פרמיה נוכחית | עלייה ₪ | עלייה %
+        mt = Table(td, colWidths=[2.0*cm,3.2*cm,2.3*cm,2.8*cm,2.0*cm,2.2*cm,2.0*cm,1.5*cm],
+                   repeatRows=1, hAlign='CENTER')
         ts = [('BACKGROUND',(0,0),(-1,0),colors.HexColor('#1F4E79')),
               ('TEXTCOLOR', (0,0),(-1,0),colors.white),
               ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
