@@ -127,10 +127,11 @@ def analyze_management_fees(file2_bytes):
     df['דמי ניהול מצבירה']   = pd.to_numeric(df['דמי ניהול מצבירה'], errors='coerce')
     df[COL_ID]                 = df[COL_ID].astype(str).str.strip()
 
-    savings_per_customer = df.groupby(COL_ID)['צבירה'].sum().reset_index()
-    savings_per_customer.columns = [COL_ID, 'צבירה כוללת']
+    # צבירה כוללת לפי לקוח + סוג מוצר בנפרד (לא מאגדים סוגים שונים יחד)
+    savings_per_type = df.groupby([COL_ID, 'סוג מוצר'])['צבירה'].sum().reset_index()
+    savings_per_type.columns = [COL_ID, 'סוג מוצר', 'צבירה כוללת']
 
-    df = df.merge(savings_per_customer, on=COL_ID)
+    df = df.merge(savings_per_type, on=[COL_ID, 'סוג מוצר'])
     df['סף מקסימלי'] = df['צבירה כוללת'].apply(get_fee_threshold)
     df['סיבת חריגה'] = df['צבירה כוללת'].apply(get_fee_reason)
 
