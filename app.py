@@ -817,9 +817,12 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
                 t = Table(td, colWidths=col_ws[:len(cols_def)], repeatRows=1)
                 ts = [
                     ('BACKGROUND',(0,0),(-1,0),colors.HexColor(hdr_color)),
+                    ('TEXTCOLOR', (0,0),(-1,0),colors.white),
                     ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
+                    ('FONTSIZE',  (0,0),(-1,0),8),
+                    ('FONTSIZE',  (0,1),(-1,-1),7),
                     ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
-                    ('VALIGN',    (0,0),(-1,-1),'TOP'),
+                    ('VALIGN',    (0,0),(-1,-1),'MIDDLE'),
                     ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
                     ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
                 ]
