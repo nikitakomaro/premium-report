@@ -5,11 +5,6 @@ import os
 import re
 import warnings
 import tempfile
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email.mime.text import MIMEText
-from email import encoders
 from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -1174,53 +1169,6 @@ if f1 and f2:
                                mime='application/pdf',
                                key=f'pdf_{safe}')
 
-    # ── שליחת מייל ──
-    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.subheader("📧 שליחת דוחות במייל")
-    st.markdown("שלח את הדוח הכולל (PDF + Excel) ישירות לכתובת מייל.")
-
-    email_to = st.text_input("✉️ כתובת מייל", placeholder="example@email.com", key="email_to")
-    if st.button("📤 שלח דוחות", use_container_width=False, key="send_email"):
-        if not email_to or '@' not in email_to:
-            st.error("נא להזין כתובת מייל תקינה")
-        else:
-            try:
-                smtp_user = st.secrets.get("SMTP_USER", "")
-                smtp_pass = st.secrets.get("SMTP_PASS", "")
-                smtp_host = st.secrets.get("SMTP_HOST", "smtp.gmail.com")
-                smtp_port = int(st.secrets.get("SMTP_PORT", 587))
-
-                if not smtp_user or not smtp_pass:
-                    st.warning("⚠️ פרטי SMTP לא מוגדרים ב-Streamlit Secrets. יש להוסיף SMTP_USER ו-SMTP_PASS.")
-                else:
-                    with st.spinner("שולח..."):
-                        msg = MIMEMultipart()
-                        msg['From']    = smtp_user
-                        msg['To']      = email_to
-                        msg['Subject'] = f"דוח ניתוח תיק — {file_month}"
-
-                        body = MIMEText(f"שלום,\n\nמצורפים דוחות ניתוח התיק לחודש {file_month}.\n\nPortfolioPro", 'plain', 'utf-8')
-                        msg.attach(body)
-
-                        for fname, data, mime_type in [
-                            (f"דוח_ניתוח_תיק_{file_month}.pdf", pdf_all, 'application/pdf'),
-                            (f"דוח_ניתוח_תיק_{file_month}.xlsx", xl_all,
-                             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
-                        ]:
-                            part = MIMEBase('application', 'octet-stream')
-                            part.set_payload(data)
-                            encoders.encode_base64(part)
-                            part.add_header('Content-Disposition', f'attachment; filename="{fname}"')
-                            msg.attach(part)
-
-                        with smtplib.SMTP(smtp_host, smtp_port) as server:
-                            server.starttls()
-                            server.login(smtp_user, smtp_pass)
-                            server.sendmail(smtp_user, email_to, msg.as_string())
-
-                    st.success(f"✅ הדוחות נשלחו בהצלחה אל {email_to}")
-            except Exception as e:
-                st.error(f"שגיאה בשליחת המייל: {e}")
 
 else:
     st.info("⬆️ העלה את שני קבצי ה-Excel כדי להתחיל")
