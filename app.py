@@ -151,6 +151,39 @@ def analyze_management_fees(file2_bytes):
 
     return exc, breakdown
 
+def analyze_gold_customers(file2_bytes):
+    """לקוחות עם צבירה כוללת מעל מיליון ש״ח במוצרי חיסכון."""
+    df_raw = pd.read_excel(io.BytesIO(file2_bytes), sheet_name='מוצרי חיסכון')
+    df = df_raw[df_raw['סוג מוצר'].isin(SAVINGS_TYPES)].copy()
+    df = df[df['סטטוס מוצר'] == 'פעיל'].copy()
+    df['צבירה'] = pd.to_numeric(df['צבירה'], errors='coerce').fillna(0)
+    df[COL_ID]  = df[COL_ID].astype(str).str.strip()
+
+    # צבירה כוללת לפי לקוח
+    totals = df.groupby(COL_ID)['צבירה'].sum().reset_index()
+    totals.columns = [COL_ID, 'צבירה כוללת']
+
+    # פירוט לפי סוג מוצר לכל לקוח
+    by_type = df.groupby([COL_ID, 'סוג מוצר'])['צבירה'].sum().unstack(fill_value=0).reset_index()
+
+    # פרטי לקוח (שם, סוכן) — שורה ראשונה לכל לקוח
+    details = df.sort_values('צבירה', ascending=False).groupby(COL_ID, sort=False).agg(
+        שם_פרטי  = ('שם פרטי לקוח',  'first'),
+        שם_משפחה = ('שם משפחה לקוח', 'first'),
+        agent     = (COL_AGENT,        'first'),
+    ).reset_index()
+    details['שם לקוח'] = details['שם_פרטי'].fillna('') + ' ' + details['שם_משפחה'].fillna('')
+
+    result = totals.merge(details[[COL_ID, 'שם לקוח', 'agent']], on=COL_ID)
+    result = result.merge(by_type, on=COL_ID, how='left')
+
+    # רק מעל מיליון
+    result = result[result['צבירה כוללת'] > 1_000_000].copy()
+    result.columns = [c.replace('קופת גמל לתגמולים ופיצויים', 'קופת גמל') for c in result.columns]
+    result = result.sort_values('צבירה כוללת', ascending=False).reset_index(drop=True)
+    result.rename(columns={'agent': COL_AGENT}, inplace=True)
+    return result
+
 def analyze(file1_bytes, file2_bytes):
     df1 = pd.read_excel(io.BytesIO(file1_bytes), sheet_name=SHEET)
     df2 = pd.read_excel(io.BytesIO(file2_bytes), sheet_name=SHEET)
@@ -185,7 +218,7 @@ def analyze(file1_bytes, file2_bytes):
     return merged, result, gone_df, new_df, df1d, df2d
 
 # ── Excel builder ─────────────────────────────────────────────────────────────
-def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None):
+def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None, gold_customers=None):
     wb = Workbook()
     HDR = PatternFill('solid', start_color='1F4E79')
     HF  = Font(name='Arial', bold=True, color='FFFFFF', size=11)
@@ -329,12 +362,41 @@ def build_excel(merged, result, gone_df, new_df, fee_exceptions=None, agent=None
                 if fill: c.fill = fill
                 if fmt:  c.number_format = fmt
 
+    # Sheet 6 — לקוחות זהב (only in combined report)
+    if gold_customers is not None and len(gold_customers) > 0 and agent is None:
+        ws6 = wb.create_sheet('לקוחות זהב')
+        ws6.sheet_view.rightToLeft = True
+        gold_type_cols = [c for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה'] if c in gold_customers.columns]
+        hdrs6 = ['ת.ז', 'שם לקוח', 'מת"ל', 'צבירה כוללת (₪)'] + [f'{c} (₪)' for c in gold_type_cols]
+        wids6 = [14, 24, 18, 18] + [18]*len(gold_type_cols)
+        GOLD_H = PatternFill('solid', start_color='FFD700')
+        GOLD_R = PatternFill('solid', start_color='FFFACD')
+        for ci, (h, w) in enumerate(zip(hdrs6, wids6), 1):
+            c = ws6.cell(row=1, column=ci, value=h)
+            c.font = Font(name='Arial', bold=True, color='000000', size=10)
+            c.fill = GOLD_H; c.alignment = CTR; c.border = BORD
+            ws6.column_dimensions[get_column_letter(ci)].width = w
+        ws6.row_dimensions[1].height = 22
+        ws6.freeze_panes = 'A2'
+        ws6.auto_filter.ref = f'A1:{get_column_letter(len(hdrs6))}1'
+        for ri, (_, row) in enumerate(gold_customers.iterrows()):
+            fill = GOLD_R if ri % 2 == 0 else None
+            vals = [row.get(COL_ID,''), row.get('שם לקוח',''), row.get(COL_AGENT,''),
+                    row.get('צבירה כוללת', 0)] + [row.get(c, 0) for c in gold_type_cols]
+            fmts = [None, None, None] + ['#,##0'] * (len(gold_type_cols) + 1)
+            for ci, (val, fmt) in enumerate(zip(vals, fmts), 1):
+                c = ws6.cell(row=ri+2, column=ci, value=val)
+                c.font = DFNT; c.border = BORD
+                c.alignment = RGT
+                if fill: c.fill = fill
+                if fmt:  c.number_format = fmt
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 # ── PDF builder ───────────────────────────────────────────────────────────────
-def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exceptions=None):
+def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exceptions=None, gold_customers=None):
     _register_font()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -535,6 +597,53 @@ def build_pdf(merged, result, gone_df, new_df, month_label, agent=None, fee_exce
         except Exception as e:
             story.append(Paragraph(rh(f'שגיאה בטעינת טבלת חריגות: {e}'), sub_s))
 
+    # ══════════════════════════════════════════════
+    # עמוד 4 — לקוחות זהב
+    # ══════════════════════════════════════════════
+    gc = gold_customers[gold_customers[COL_AGENT] == agent] if (gold_customers is not None and agent) else gold_customers
+    if gc is not None and len(gc) > 0:
+        try:
+            story.append(PageBreak())
+            story += page_header('לקוחות זהב — צבירה מעל ₪1,000,000')
+            story.append(Paragraph(rh(f'לקוחות עם צבירה כוללת מעל מיליון ש״ח ({len(gc)})'), sec_s))
+
+            gold_type_cols = [c for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה'] if c in gc.columns]
+            gh = [rh('ת.ז'), rh('שם לקוח'), rh('מת"ל'), rh('צבירה כוללת')] + [rh(c) for c in gold_type_cols]
+            gd = [gh]
+            for _, row in gc.iterrows():
+                gr = [
+                    rh(str(row.get(COL_ID,''))),
+                    rh(str(row.get('שם לקוח',''))),
+                    rh(str(row.get(COL_AGENT,''))),
+                    f"₪{row.get('צבירה כוללת',0):,.0f}",
+                ]
+                for c in gold_type_cols:
+                    v = row.get(c, 0)
+                    gr.append(f"₪{v:,.0f}" if v > 0 else '—')
+                gd.append(gr)
+
+            ncols = len(gh)
+            base_w = 17.5 / ncols
+            col_ws = [1.8*cm, 3.5*cm, 2.5*cm] + [2.2*cm] * (ncols - 3)
+
+            gt = Table(gd, colWidths=col_ws, repeatRows=1)
+            gts = [
+                ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B8860B')),
+                ('TEXTCOLOR', (0,0),(-1,0),colors.white),
+                ('FONTNAME',  (0,0),(-1,-1),BASE_FONT),
+                ('FONTSIZE',  (0,0),(-1,0),9),('FONTSIZE',(0,1),(-1,-1),8),
+                ('ALIGN',     (0,0),(-1,-1),'RIGHT'),
+                ('GRID',      (0,0),(-1,-1),0.3,colors.HexColor('#CCCCCC')),
+                ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4),
+            ]
+            for i in range(1, len(gd)):
+                bg = colors.HexColor('#FFFACD') if i % 2 == 1 else colors.HexColor('#FFF8DC')
+                gts.append(('BACKGROUND',(0,i),(-1,i),bg))
+            gt.setStyle(TableStyle(gts))
+            story.append(gt)
+        except Exception as e:
+            story.append(Paragraph(rh(f'שגיאה בטעינת טבלת לקוחות זהב: {e}'), sub_s))
+
     doc.build(story)
     return buf.getvalue()
 
@@ -589,6 +698,7 @@ if f1 and f2:
             f2_bytes = f2.read()
             merged, result, gone_df, new_df, df1d, df2d = analyze(f1_bytes, f2_bytes)
             fee_exceptions, fee_breakdown = analyze_management_fees(f2_bytes)
+            gold_customers = analyze_gold_customers(f2_bytes)
             agents = sorted(merged['מת"ל'].dropna().unique().tolist())
             month_label = f'{f1.name[:10]} ← {f2.name[:10]}'
         except Exception as e:
@@ -664,6 +774,26 @@ if f1 and f2:
         fee_preview['סף מקסימלי']          = fee_preview['סף מקסימלי'].map(lambda x: f"{x*100:.2f}%")
         st.dataframe(fee_preview, use_container_width=True, hide_index=True)
 
+    # ── Gold customers ──
+    if len(gold_customers) > 0:
+        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+        st.subheader(f"🏆 לקוחות זהב — {len(gold_customers)} לקוחות עם צבירה מעל ₪1M")
+        st.markdown(f"""
+        <div style="background:#7A6000;border-radius:10px;padding:12px 16px;border:2px solid #FFD700;text-align:right;direction:rtl;margin-bottom:12px;color:#FFF8DC;">
+        ⭐ לקוחות עם צבירה כוללת מעל ₪1,000,000 במוצרי חיסכון (קרן השתלמות, קופת גמל, גמל להשקעה)
+        </div>
+        """, unsafe_allow_html=True)
+        gold_cols = ['שם לקוח', COL_AGENT, 'צבירה כוללת']
+        for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה']:
+            if c in gold_customers.columns:
+                gold_cols.append(c)
+        gold_preview = gold_customers[[c for c in gold_cols if c in gold_customers.columns]].copy()
+        gold_preview['צבירה כוללת'] = gold_preview['צבירה כוללת'].map(lambda x: f"₪{x:,.0f}")
+        for c in ['קרן השתלמות', 'קופת גמל', 'קופת גמל להשקעה']:
+            if c in gold_preview.columns:
+                gold_preview[c] = gold_preview[c].map(lambda x: f"₪{x:,.0f}" if x > 0 else '—')
+        st.dataframe(gold_preview, use_container_width=True, hide_index=True)
+
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
     # ── Downloads ──
@@ -671,8 +801,8 @@ if f1 and f2:
 
     # Combined
     with st.spinner("בונה דוח כולל..."):
-        xl_all  = build_excel(merged, result, gone_df, new_df, fee_exceptions=fee_exceptions)
-        pdf_all = build_pdf(merged, result, gone_df, new_df, month_label, fee_exceptions=fee_exceptions)
+        xl_all  = build_excel(merged, result, gone_df, new_df, fee_exceptions=fee_exceptions, gold_customers=gold_customers)
+        pdf_all = build_pdf(merged, result, gone_df, new_df, month_label, fee_exceptions=fee_exceptions, gold_customers=gold_customers)
 
     st.markdown("**דוח כולל — כל הסוכנים**")
     ca, cb = st.columns(2)
@@ -690,7 +820,7 @@ if f1 and f2:
     for agent in agents:
         with st.spinner(f"בונה דוח עבור {agent}..."):
             xl_a  = build_excel(merged, result, gone_df, new_df, agent=agent)
-            pdf_a = build_pdf(merged, result, gone_df, new_df, month_label, agent=agent, fee_exceptions=fee_exceptions)
+            pdf_a = build_pdf(merged, result, gone_df, new_df, month_label, agent=agent, fee_exceptions=fee_exceptions, gold_customers=gold_customers)
         safe = agent.replace(' ','_')
         st.markdown(f"**{agent}**")
         da, db = st.columns(2)
